@@ -20,8 +20,8 @@ func TestShellHookZsh(t *testing.T) {
 	if !strings.Contains(hook, "coltty apply --quiet") {
 		t.Error("zsh hook should call coltty apply --quiet")
 	}
-	if !strings.Contains(hook, "&!") {
-		t.Error("zsh hook should run in background with &!")
+	if strings.Contains(hook, "&") {
+		t.Error("zsh hook should run in foreground (no &) so OSC sequences reach the terminal")
 	}
 }
 

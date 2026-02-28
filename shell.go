@@ -16,7 +16,7 @@ func ShellHook(shell string) (string, error) {
 
 func zshHook() string {
 	return `coltty_chpwd() {
-    coltty apply --quiet 2>/dev/null &!
+    coltty apply --quiet 2>/dev/null
 }
 chpwd_functions+=(coltty_chpwd)
 `
@@ -24,7 +24,7 @@ chpwd_functions+=(coltty_chpwd)
 
 func bashHook() string {
 	return `__coltty_prompt_command() {
-    coltty apply --quiet 2>/dev/null &
+    coltty apply --quiet 2>/dev/null
 }
 if [[ ! "$PROMPT_COMMAND" =~ __coltty_prompt_command ]]; then
     PROMPT_COMMAND="__coltty_prompt_command;${PROMPT_COMMAND}"
