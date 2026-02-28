@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
-	"github.com/adrg/xdg"
 )
 
 // Scheme defines a color scheme with foreground, background, cursor, and palette colors.
@@ -60,7 +59,8 @@ func globalConfigPath() string {
 	if globalConfigPathOverride != "" {
 		return globalConfigPathOverride
 	}
-	return filepath.Join(xdg.ConfigHome, "coltty", "config.toml")
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "coltty", "config.toml")
 }
 
 // LoadGlobalConfig reads and parses the global config file.

@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/adrg/xdg"
 )
 
 // GhosttyAdapter applies color schemes by writing a Ghostty config fragment file.
@@ -17,10 +15,11 @@ type GhosttyAdapter struct {
 }
 
 // NewGhosttyAdapter creates a GhosttyAdapter with the given fragment path.
-// If path is empty, the default XDG config path is used.
+// If path is empty, defaults to ~/.config/coltty/ghostty-colors.
 func NewGhosttyAdapter(fragmentPath string) *GhosttyAdapter {
 	if fragmentPath == "" {
-		fragmentPath = filepath.Join(xdg.ConfigHome, "coltty", "ghostty-colors")
+		home, _ := os.UserHomeDir()
+		fragmentPath = filepath.Join(home, ".config", "coltty", "ghostty-colors")
 	}
 	return &GhosttyAdapter{FragmentPath: fragmentPath}
 }
