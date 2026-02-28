@@ -1,6 +1,6 @@
 # Coltty Design
 
-A Rust CLI tool and shell hook that automatically switches terminal color schemes based on your current directory, giving each project a distinct visual identity at a glance.
+A Go CLI tool and shell hook that automatically switches terminal color schemes based on your current directory, giving each project a distinct visual identity at a glance.
 
 ## Core Flow
 
@@ -108,16 +108,16 @@ palette = 14=#7dcfff
 palette = 15=#c0caf5
 ```
 
-### Future Adapter Trait
+### Future Adapter Interface
 
-```rust
-trait TerminalAdapter {
-    fn apply(&self, scheme: &ResolvedScheme) -> Result<()>;
-    fn detect(&self) -> bool;
+```go
+type TerminalAdapter interface {
+    Apply(scheme *ResolvedScheme) error
+    Detect() bool
 }
 ```
 
-`detect()` checks if the terminal is active (e.g., `$TERM_PROGRAM == ghostty`), so coltty can auto-select the right adapter.
+`Detect()` checks if the terminal is active (e.g., `$TERM_PROGRAM == ghostty`), so coltty can auto-select the right adapter.
 
 ## Shell Integration
 
@@ -164,22 +164,21 @@ eval "$(coltty init bash)"
 
 ```
 coltty/
-├── Cargo.toml
-├── src/
-│   ├── main.rs          # CLI entry point (clap)
-│   ├── config.rs         # TOML parsing, scheme resolution
-│   ├── resolver.rs       # Directory walk + config merging
-│   ├── adapter/
-│   │   ├── mod.rs        # TerminalAdapter trait
-│   │   └── ghostty.rs    # Ghostty adapter
-│   └── shell.rs          # Shell hook generation
+├── go.mod
+├── main.go              # CLI entry point (cobra)
+├── config.go            # TOML parsing, scheme resolution
+├── resolver.go          # Directory walk + config merging
+├── adapter/
+│   ├── adapter.go       # TerminalAdapter interface
+│   └── ghostty.go       # Ghostty adapter
+└── shell.go             # Shell hook generation
 ```
 
 ### Dependencies
 
-- `clap` — CLI argument parsing
-- `serde` + `toml` — config parsing
-- `dirs` — XDG/home directory resolution
+- `cobra` — CLI command framework
+- `BurntSushi/toml` — TOML parsing
+- `adrg/xdg` — XDG base directory resolution
 
 ## Error Handling
 
