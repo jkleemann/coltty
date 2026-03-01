@@ -113,20 +113,55 @@ User-defined schemes with the same name as a built-in will override it.
 
 ## Built-in Schemes
 
-Coltty ships with 8 built-in color schemes available without any config file. All meet WCAG AA contrast requirements (>=4.5:1 fg/bg ratio).
+Coltty ships with 8 built-in color schemes available without any config file. Each includes full 16-color ANSI palette and cursor color. Use `coltty schemes` to see all available schemes.
 
-| Name | Aesthetic | Background | Foreground |
-|------|-----------|------------|------------|
-| `gruvbox` | Warm retro | `#282828` | `#ebdbb2` |
-| `nord` | Cool arctic | `#2e3440` | `#d8dee9` |
-| `dracula` | Purple-tinted | `#282a36` | `#f8f8f2` |
-| `solarized-dark` | Teal classic | `#002b36` | `#839496` |
-| `catppuccin` | Pastel dark | `#1e1e2e` | `#cdd6f4` |
-| `one-dark` | Atom-style | `#282c34` | `#abb2bf` |
-| `rose-pine` | Muted floral | `#191724` | `#e0def4` |
-| `kanagawa` | Japanese ink | `#1f1f28` | `#dcd7ba` |
+### gruvbox — Warm retro
 
-Each includes full 16-color ANSI palette and cursor color. Use `coltty schemes` to see all available schemes.
+| bg | fg | red | green | yellow | blue | magenta | cyan |
+|----|----|-----|-------|--------|------|---------|------|
+| `#282828` | `#ebdbb2` | `#cc241d` | `#98971a` | `#d79921` | `#458588` | `#b16286` | `#689d6a` |
+
+### nord — Cool arctic
+
+| bg | fg | red | green | yellow | blue | magenta | cyan |
+|----|----|-----|-------|--------|------|---------|------|
+| `#2e3440` | `#d8dee9` | `#bf616a` | `#a3be8c` | `#ebcb8b` | `#81a1c1` | `#b48ead` | `#88c0d0` |
+
+### dracula — Purple-tinted
+
+| bg | fg | red | green | yellow | blue | magenta | cyan |
+|----|----|-----|-------|--------|------|---------|------|
+| `#282a36` | `#f8f8f2` | `#ff5555` | `#50fa7b` | `#f1fa8c` | `#bd93f9` | `#ff79c6` | `#8be9fd` |
+
+### solarized-dark — Teal classic
+
+| bg | fg | red | green | yellow | blue | magenta | cyan |
+|----|----|-----|-------|--------|------|---------|------|
+| `#002b36` | `#839496` | `#dc322f` | `#859900` | `#b58900` | `#268bd2` | `#d33682` | `#2aa198` |
+
+### catppuccin — Pastel dark
+
+| bg | fg | red | green | yellow | blue | magenta | cyan |
+|----|----|-----|-------|--------|------|---------|------|
+| `#1e1e2e` | `#cdd6f4` | `#f38ba8` | `#a6e3a1` | `#f9e2af` | `#89b4fa` | `#f5c2e7` | `#94e2d5` |
+
+### one-dark — Atom-style
+
+| bg | fg | red | green | yellow | blue | magenta | cyan |
+|----|----|-----|-------|--------|------|---------|------|
+| `#282c34` | `#abb2bf` | `#e06c75` | `#98c379` | `#e5c07b` | `#61afef` | `#c678dd` | `#56b6c2` |
+
+### rose-pine — Muted floral
+
+| bg | fg | red | green | yellow | blue | magenta | cyan |
+|----|----|-----|-------|--------|------|---------|------|
+| `#191724` | `#e0def4` | `#eb6f92` | `#31748f` | `#f6c177` | `#9ccfd8` | `#c4a7e7` | `#ebbcba` |
+
+### kanagawa — Japanese ink
+
+| bg | fg | red | green | yellow | blue | magenta | cyan |
+|----|----|-----|-------|--------|------|---------|------|
+| `#1f1f28` | `#dcd7ba` | `#c34043` | `#76946a` | `#c0a36e` | `#7e9cd8` | `#957fb8` | `#6a9589` |
 
 ## Importing Themes
 
@@ -150,6 +185,35 @@ coltty import dracula.itermcolors --append
 
 # Explicitly set format (overrides auto-detection)
 coltty import theme.txt --format base16
+```
+
+### Importing from Gogh
+
+[Gogh](https://github.com/Gogh-Co/Gogh) is a collection of 250+ terminal color schemes. Clone the repo and import any scheme directly:
+
+```bash
+git clone https://github.com/Gogh-Co/Gogh.git
+cd Gogh
+
+# Import a single scheme
+coltty import data/json/dracula.json --append
+
+# Preview a scheme as TOML before importing
+coltty import data/json/gruvbox-dark.json
+```
+
+To import all Gogh schemes at once:
+
+```bash
+for f in data/json/*.json; do
+    coltty import "$f" --append
+done
+```
+
+After importing, schemes are available by name in any `.coltty.toml`:
+
+```toml
+scheme = "dracula"
 ```
 
 ## Configuration
