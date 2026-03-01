@@ -10,7 +10,7 @@ Coltty is a small Go CLI that hooks into your shell's `cd` command. When you cha
 |----------|-----------|-------------|-----------------|
 | [Ghostty](https://ghostty.org) | OSC + config fragment | One-time `config-file` line | — |
 | [iTerm2](https://iterm2.com) | OSC + proprietary OSC 1337 | — | tab, bold, selection, presets |
-| [Terminal.app](https://support.apple.com/guide/terminal) | AppleScript profile switching | Pre-create profiles | — |
+| [Terminal.app](https://support.apple.com/guide/terminal) | AppleScript profile switching | `coltty setup terminal-app` or auto-created | — |
 | [Alacritty](https://alacritty.org) | OSC | — | — |
 | [Kitty](https://sw.kovidgoyal.net/kitty/) | OSC | — | — |
 | [WezTerm](https://wezfurlong.org/wezterm/) | OSC | — | — |
@@ -241,9 +241,17 @@ These fields are set via iTerm2's proprietary OSC 1337 sequences and are silentl
 
 ### Terminal.app
 
-Terminal.app does not support OSC color-setting sequences. Instead, coltty switches to a named **settings profile** via AppleScript.
+Terminal.app does not support OSC color-setting sequences. Instead, coltty switches to a named **settings profile** via AppleScript. Profiles are created automatically when needed — both by `coltty apply` (on-the-fly) and by the one-time setup command below.
 
-**Setup**: create Terminal.app profiles (Terminal > Settings > Profiles) matching your scheme names. For example, if your scheme is named `calm`, create a Terminal.app profile called "calm".
+**One-time setup** (creates profiles for all known schemes at once):
+
+```bash
+coltty setup terminal-app
+```
+
+This creates or updates a Terminal.app profile for every scheme (built-in and user-defined), setting each profile's foreground, background, and cursor colors. Running it again is idempotent.
+
+If you skip this step, `coltty apply` will still create profiles on-the-fly as you `cd` into directories.
 
 To use a different profile name than the scheme name, set `terminal_app_profile` in your scheme:
 
@@ -254,6 +262,8 @@ background = "#1a1b26"
 cursor = "#c0caf5"
 terminal_app_profile = "My Custom Profile"
 ```
+
+**Limitation**: Terminal.app's AppleScript dictionary only exposes foreground, background, and cursor colors — ANSI palette colors cannot be set programmatically.
 
 ### Alacritty / Kitty / WezTerm / xterm / foot
 
@@ -279,6 +289,7 @@ Not supported. GNU Screen does not pass through OSC escape sequences. Coltty pri
 | `coltty set <scheme> --inline` | Same, but write full color values for customization |
 | `coltty show` | Show the resolved scheme and which config matched |
 | `coltty schemes` | List all available schemes (built-in and user-defined) |
+| `coltty setup terminal-app` | Create Terminal.app profiles for all schemes |
 | `coltty import <file>` | Import a theme file and print as TOML |
 | `coltty import <file> --append` | Import and add directly to global config |
 | `coltty import --list-formats` | List supported import formats |
