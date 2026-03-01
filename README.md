@@ -290,9 +290,13 @@ Replace `<you>` with your username, or use the full path from `echo ~/.config/co
 
 The fragment is written to `~/.config/coltty/ghostty-colors` and Ghostty watches it for changes. Existing terminals get instant color changes via OSC; the fragment handles persistence for new terminals.
 
+**Tabs and split panes**: Each Ghostty pane has its own shell session and runs its own shell hook. When you `cd` in a split pane or tab, only that pane's colors change — other panes keep their current scheme. This means you can have different color schemes visible side-by-side across splits and tabs.
+
 ### iTerm2
 
 Works out of the box — no extra setup needed.
+
+**Tabs and split panes**: Like Ghostty, each iTerm2 pane runs its own shell session. Color changes via OSC sequences are scoped to the individual pane, so splitting a window and `cd`-ing into different projects gives each pane its own color scheme independently.
 
 iTerm2 supports extended color fields beyond the standard foreground/background/cursor/palette:
 
