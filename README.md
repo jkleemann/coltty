@@ -128,6 +128,30 @@ Coltty ships with 8 built-in color schemes available without any config file. Al
 
 Each includes full 16-color ANSI palette and cursor color. Use `coltty schemes` to see all available schemes.
 
+## Importing Themes
+
+Coltty can import color schemes from popular theme formats:
+
+| Format | Extensions | Source |
+|--------|-----------|--------|
+| Gogh | `.json` | [Gogh](https://github.com/Gogh-Co/Gogh) terminal themes |
+| base16 | `.yaml`, `.yml` | [base16](https://github.com/tinted-theming/schemes) scheme files |
+| iTerm2 | `.itermcolors` | iTerm2 color preset exports |
+
+```bash
+# Print as TOML (pipe to config or copy-paste)
+coltty import ~/Downloads/monokai.json
+
+# Override the scheme name
+coltty import theme.yaml --name my-monokai
+
+# Add directly to global config
+coltty import dracula.itermcolors --append
+
+# Explicitly set format (overrides auto-detection)
+coltty import theme.txt --format base16
+```
+
 ## Configuration
 
 ### Global config (`~/.config/coltty/config.toml`)
@@ -255,6 +279,9 @@ Not supported. GNU Screen does not pass through OSC escape sequences. Coltty pri
 | `coltty set <scheme> --inline` | Same, but write full color values for customization |
 | `coltty show` | Show the resolved scheme and which config matched |
 | `coltty schemes` | List all available schemes (built-in and user-defined) |
+| `coltty import <file>` | Import a theme file and print as TOML |
+| `coltty import <file> --append` | Import and add directly to global config |
+| `coltty import --list-formats` | List supported import formats |
 
 ## How It Works
 
