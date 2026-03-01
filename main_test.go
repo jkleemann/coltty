@@ -106,6 +106,117 @@ func TestSchemesCommandNoConfig(t *testing.T) {
 	}
 }
 
+func TestSetCommandCreatesConfig(t *testing.T) {
+	dir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldDir)
+
+	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
+	defer func() { globalConfigPathOverride = "" }()
+
+	_, stderr, err := executeCommand("set", "dracula")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".coltty.toml"))
+	if err != nil {
+		t.Fatal("expected .coltty.toml to be created:", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, `scheme = "dracula"`) {
+		t.Errorf("expected scheme = \"dracula\", got:\n%s", content)
+	}
+	if !strings.Contains(stderr, `set scheme "dracula"`) {
+		t.Errorf("expected confirmation on stderr, got: %s", stderr)
+	}
+}
+
+func TestSetCommandInline(t *testing.T) {
+	dir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldDir)
+
+	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
+	defer func() { globalConfigPathOverride = "" }()
+	defer func() { setInline = false }()
+
+	_, _, err := executeCommand("set", "dracula", "--inline")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".coltty.toml"))
+	if err != nil {
+		t.Fatal("expected .coltty.toml to be created:", err)
+	}
+	content := string(data)
+	if strings.Contains(content, `scheme = "dracula"`) {
+		t.Error("inline mode should not write a scheme reference")
+	}
+	if !strings.Contains(content, "[overrides]") {
+		t.Error("expected [overrides] section in inline mode")
+	}
+	if !strings.Contains(content, `foreground = "#f8f8f2"`) {
+		t.Error("expected dracula foreground color")
+	}
+	if !strings.Contains(content, `background = "#282a36"`) {
+		t.Error("expected dracula background color")
+	}
+	if !strings.Contains(content, `"#ff5555"`) {
+		t.Error("expected palette colors")
+	}
+}
+
+func TestSetCommandRejectsUnknown(t *testing.T) {
+	dir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldDir)
+
+	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
+	defer func() { globalConfigPathOverride = "" }()
+
+	_, _, err := executeCommand("set", "nonexistent-scheme")
+	if err == nil {
+		t.Fatal("expected error for unknown scheme")
+	}
+
+	// File should not be created.
+	if _, statErr := os.Stat(filepath.Join(dir, ".coltty.toml")); statErr == nil {
+		t.Error("expected no .coltty.toml for unknown scheme")
+	}
+}
+
+func TestSetCommandOverwritesExisting(t *testing.T) {
+	dir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldDir)
+
+	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
+	defer func() { globalConfigPathOverride = "" }()
+
+	// Create an existing file.
+	os.WriteFile(filepath.Join(dir, ".coltty.toml"), []byte(`scheme = "nord"`), 0644)
+
+	_, stderr, err := executeCommand("set", "dracula")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(stderr, "overwriting") {
+		t.Error("expected overwrite warning on stderr")
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".coltty.toml"))
+	if !strings.Contains(string(data), `scheme = "dracula"`) {
+		t.Error("expected file to be overwritten with new scheme")
+	}
+}
+
 func TestSchemesCommandWithConfig(t *testing.T) {
 	configDir := t.TempDir()
 

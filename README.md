@@ -251,6 +251,8 @@ Not supported. GNU Screen does not pass through OSC escape sequences. Coltty pri
 | `coltty apply` | Apply the scheme for the current directory |
 | `coltty apply --quiet` | Apply silently (used by the shell hook) |
 | `coltty apply --dry-run` | Print what would be applied without changing anything |
+| `coltty set <scheme>` | Set the color scheme for the current directory |
+| `coltty set <scheme> --inline` | Same, but write full color values for customization |
 | `coltty show` | Show the resolved scheme and which config matched |
 | `coltty schemes` | List all available schemes (built-in and user-defined) |
 

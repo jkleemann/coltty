@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -32,6 +33,7 @@ var initCmd = &cobra.Command{
 
 var applyQuiet bool
 var applyDryRun bool
+var setInline bool
 
 var applyCmd = &cobra.Command{
 	Use:   "apply",
@@ -171,14 +173,125 @@ var schemesCmd = &cobra.Command{
 	},
 }
 
+var setCmd = &cobra.Command{
+	Use:   "set <scheme>",
+	Short: "Set the color scheme for the current directory",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		schemeName := args[0]
+
+		globalCfg, err := LoadGlobalConfig()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "coltty: warning: failed to load global config: %v\n", err)
+		}
+
+		// Look up scheme: user config first, then built-in.
+		scheme, ok := lookupScheme(schemeName, globalCfg)
+		if !ok {
+			return fmt.Errorf("unknown scheme %q (use 'coltty schemes' to list available schemes)", schemeName)
+		}
+
+		configPath := filepath.Join(".", dirConfigFile)
+
+		// Warn if overwriting existing file.
+		if _, err := os.Stat(configPath); err == nil {
+			fmt.Fprintf(os.Stderr, "coltty: overwriting existing %s\n", dirConfigFile)
+		}
+
+		var content string
+		if setInline {
+			content = formatInlineConfig(schemeName, scheme)
+		} else {
+			content = fmt.Sprintf("scheme = %q\n", schemeName)
+		}
+
+		if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", dirConfigFile, err)
+		}
+
+		// Apply the scheme immediately.
+		resolved := &ResolvedScheme{
+			Foreground:          scheme.Foreground,
+			Background:          scheme.Background,
+			Cursor:              scheme.Cursor,
+			Palette:             scheme.Palette,
+			Source:              configPath,
+			SchemeName:          schemeName,
+			Bold:                scheme.Bold,
+			SelectionForeground: scheme.SelectionForeground,
+			SelectionBackground: scheme.SelectionBackground,
+			Tab:                 scheme.Tab,
+			ItermPreset:         scheme.ItermPreset,
+			TerminalAppProfile:  scheme.TerminalAppProfile,
+		}
+		adapterScheme := toAdapterScheme(resolved)
+
+		a := adapter.DetectAdapter(adapter.AllAdapters())
+		if a != nil {
+			if err := a.Apply(adapterScheme); err != nil {
+				fmt.Fprintf(os.Stderr, "coltty: warning: %s adapter: %v\n", a.Name(), err)
+			}
+		}
+
+		fmt.Fprintf(os.Stderr, "coltty: set scheme %q in %s\n", schemeName, dirConfigFile)
+		return nil
+	},
+}
+
+// lookupScheme finds a scheme by name in user config or built-in schemes.
+func lookupScheme(name string, globalCfg *GlobalConfig) (Scheme, bool) {
+	if globalCfg != nil {
+		if s, ok := globalCfg.Schemes[name]; ok {
+			return s, true
+		}
+	}
+	if s, ok := builtinSchemes[name]; ok {
+		return s, true
+	}
+	return Scheme{}, false
+}
+
+// formatInlineConfig generates a .coltty.toml with full color values under [overrides].
+func formatInlineConfig(schemeName string, s Scheme) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Generated from scheme %q\n\n[overrides]\n", schemeName)
+	fmt.Fprintf(&b, "foreground = %q\n", s.Foreground)
+	fmt.Fprintf(&b, "background = %q\n", s.Background)
+	fmt.Fprintf(&b, "cursor = %q\n", s.Cursor)
+	if len(s.Palette) > 0 {
+		b.WriteString("palette = [\n")
+		for i := 0; i < len(s.Palette); i += 4 {
+			end := i + 4
+			if end > len(s.Palette) {
+				end = len(s.Palette)
+			}
+			quoted := make([]string, end-i)
+			for j, c := range s.Palette[i:end] {
+				quoted[j] = fmt.Sprintf("%q", c)
+			}
+			b.WriteString("    ")
+			b.WriteString(strings.Join(quoted, ", "))
+			if end < len(s.Palette) {
+				b.WriteString(",")
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString("]\n")
+	}
+	return b.String()
+}
+
 func init() {
 	applyCmd.Flags().BoolVar(&applyQuiet, "quiet", false, "suppress output unless there's an error")
 	applyCmd.Flags().BoolVar(&applyDryRun, "dry-run", false, "print the resolved scheme without applying")
+
+	setCmd.Flags().BoolVar(&setInline, "inline", false, "write full color values instead of a scheme reference")
 
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(applyCmd)
 	rootCmd.AddCommand(showCmd)
 	rootCmd.AddCommand(schemesCmd)
+	rootCmd.AddCommand(setCmd)
 }
 
 func main() {
