@@ -124,6 +124,41 @@ if ! command -v coltty >/dev/null 2>&1; then
     warn ""
 fi
 
+# ─── Add shell hook ─────────────────────────────────────────────────────────
+
+HOOK_LINE='eval "$(coltty init zsh)"'
+HOOK_LINE_BASH='eval "$(coltty init bash)"'
+
+# Detect current shell and pick the right rc file.
+CURRENT_SHELL="$(basename "${SHELL:-/bin/sh}")"
+case "$CURRENT_SHELL" in
+    zsh)
+        RC_FILE="$HOME/.zshrc"
+        HOOK="$HOOK_LINE"
+        ;;
+    bash)
+        RC_FILE="$HOME/.bashrc"
+        HOOK="$HOOK_LINE_BASH"
+        ;;
+    *)
+        RC_FILE=""
+        ;;
+esac
+
+if [ -n "$RC_FILE" ]; then
+    if [ -f "$RC_FILE" ] && grep -qF "coltty init" "$RC_FILE"; then
+        info "Shell hook already present in ${RC_FILE}"
+    else
+        printf '\n# coltty — automatic terminal color schemes\n%s\n' "$HOOK" >> "$RC_FILE"
+        info "Added shell hook to ${RC_FILE}"
+    fi
+else
+    warn "Could not detect shell (got: ${CURRENT_SHELL})."
+    warn "Manually add the hook to your shell profile:"
+    warn "  zsh:  eval \"\$(coltty init zsh)\"   → ~/.zshrc"
+    warn "  bash: eval \"\$(coltty init bash)\"  → ~/.bashrc"
+fi
+
 # ─── Next steps ───────────────────────────────────────────────────────────────
 
 cat <<'EOF'
@@ -132,29 +167,11 @@ cat <<'EOF'
 
   Next steps:
 
-  1. Add the shell hook to your shell profile:
+  1. Tag a project directory:
 
-     # zsh (~/.zshrc)
-     eval "$(coltty init zsh)"
+     echo 'scheme = "dracula"' > ~/projects/myapp/.coltty.toml
 
-     # bash (~/.bashrc)
-     eval "$(coltty init bash)"
-
-  2. Create a global config at ~/.config/coltty/config.toml:
-
-     [default]
-     scheme = "calm"
-
-     [schemes.calm]
-     foreground = "#c0caf5"
-     background = "#1a1b26"
-     cursor = "#c0caf5"
-
-  3. Tag a project directory:
-
-     echo 'scheme = "calm"' > ~/projects/myapp/.coltty.toml
-
-  4. cd into the directory and watch the colors change!
+  2. Open a new shell (or run: source ~/.zshrc) and cd into the directory!
 
   See https://github.com/jkleemann/coltty for full documentation.
 
