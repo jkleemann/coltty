@@ -97,8 +97,12 @@ func TestSchemesCommandNoConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "No schemes defined") {
-		t.Error("expected 'No schemes defined' message")
+	// With no user config, built-in schemes should still be listed.
+	if !strings.Contains(stdout, "gruvbox") {
+		t.Error("expected 'gruvbox' built-in scheme in output")
+	}
+	if !strings.Contains(stdout, "(built-in)") {
+		t.Error("expected '(built-in)' marker in output")
 	}
 }
 
@@ -114,10 +118,10 @@ foreground = "#c0caf5"
 background = "#1a1b26"
 cursor = "#c0caf5"
 
-[schemes.danger]
-foreground = "#f8f8f2"
-background = "#3b0a0a"
-cursor = "#ff5555"
+[schemes.dracula]
+foreground = "#custom"
+background = "#override"
+cursor = "#user"
 `
 	configPath := filepath.Join(configDir, "config.toml")
 	os.WriteFile(configPath, []byte(config), 0644)
@@ -132,10 +136,14 @@ cursor = "#ff5555"
 	if !strings.Contains(stdout, "calm") {
 		t.Error("expected 'calm' scheme in output")
 	}
-	if !strings.Contains(stdout, "danger") {
-		t.Error("expected 'danger' scheme in output")
+	if !strings.Contains(stdout, "gruvbox") {
+		t.Error("expected 'gruvbox' built-in scheme in output")
 	}
 	if !strings.Contains(stdout, "(default)") {
 		t.Error("expected default marker on calm scheme")
+	}
+	// dracula is both built-in and user-defined, so it should show (override)
+	if !strings.Contains(stdout, "(override)") {
+		t.Error("expected '(override)' marker for user-overridden built-in scheme")
 	}
 }

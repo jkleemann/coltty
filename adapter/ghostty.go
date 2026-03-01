@@ -13,6 +13,7 @@ type GhosttyAdapter struct {
 	// FragmentPath is where the Ghostty color fragment is written.
 	// If empty, defaults to ~/.config/coltty/ghostty-colors.
 	FragmentPath string
+	Emitter      OSCEmitter
 }
 
 // NewGhosttyAdapter creates a GhosttyAdapter with the given fragment path.
@@ -40,7 +41,7 @@ func (g *GhosttyAdapter) Apply(scheme *ResolvedScheme) error {
 	}
 
 	// Emit OSC sequences to update the active terminal immediately
-	g.emitOSC(scheme)
+	g.Emitter.Emit(scheme)
 
 	return nil
 }
@@ -60,31 +61,6 @@ func (g *GhosttyAdapter) writeFragment(scheme *ResolvedScheme) error {
 	return nil
 }
 
-// emitOSC writes OSC escape sequences to stdout to change terminal colors
-// immediately in the current session.
-//
-//   - OSC 10: set foreground
-//   - OSC 11: set background
-//   - OSC 12: set cursor color
-//   - OSC 4:  set palette color
-func (g *GhosttyAdapter) emitOSC(scheme *ResolvedScheme) {
-	var b strings.Builder
-
-	if scheme.Foreground != "" {
-		fmt.Fprintf(&b, "\033]10;%s\033\\", scheme.Foreground)
-	}
-	if scheme.Background != "" {
-		fmt.Fprintf(&b, "\033]11;%s\033\\", scheme.Background)
-	}
-	if scheme.Cursor != "" {
-		fmt.Fprintf(&b, "\033]12;%s\033\\", scheme.Cursor)
-	}
-	for i, color := range scheme.Palette {
-		fmt.Fprintf(&b, "\033]4;%d;%s\033\\", i, color)
-	}
-
-	fmt.Fprint(os.Stdout, b.String())
-}
 
 func (g *GhosttyAdapter) renderFragment(scheme *ResolvedScheme) string {
 	var b strings.Builder

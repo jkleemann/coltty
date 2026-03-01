@@ -59,6 +59,10 @@ var applyCmd = &cobra.Command{
 
 		adapterScheme := toAdapterScheme(resolved)
 
+		if adapter.InScreen() && !applyQuiet {
+			fmt.Fprintln(os.Stderr, "coltty: warning: GNU Screen does not support dynamic color changes")
+		}
+
 		a := adapter.DetectAdapter(adapter.AllAdapters())
 		if a == nil {
 			if !applyQuiet {
@@ -108,33 +112,59 @@ var showCmd = &cobra.Command{
 
 var schemesCmd = &cobra.Command{
 	Use:   "schemes",
-	Short: "List all named schemes from the global config",
+	Short: "List all available schemes (built-in and user-defined)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		globalCfg, err := LoadGlobalConfig()
 		if err != nil {
 			return fmt.Errorf("loading global config: %w", err)
 		}
 
-		if globalCfg == nil || len(globalCfg.Schemes) == 0 {
-			fmt.Println("No schemes defined. Create a config at", globalConfigPath())
+		var defaultScheme string
+		if globalCfg != nil {
+			defaultScheme = globalCfg.Default.Scheme
+		}
+
+		// Collect all scheme names and their sources.
+		type schemeEntry struct {
+			scheme Scheme
+			tag    string // "(built-in)", "(override)", or ""
+		}
+		entries := make(map[string]schemeEntry)
+
+		// Start with built-in schemes.
+		for name, s := range BuiltinSchemes() {
+			entries[name] = schemeEntry{scheme: s, tag: " (built-in)"}
+		}
+
+		// Layer user-defined schemes on top.
+		if globalCfg != nil {
+			for name, s := range globalCfg.Schemes {
+				tag := ""
+				if _, isBuiltin := entries[name]; isBuiltin {
+					tag = " (override)"
+				}
+				entries[name] = schemeEntry{scheme: s, tag: tag}
+			}
+		}
+
+		if len(entries) == 0 {
+			fmt.Println("No schemes available.")
 			return nil
 		}
 
-		defaultScheme := globalCfg.Default.Scheme
-
-		names := make([]string, 0, len(globalCfg.Schemes))
-		for name := range globalCfg.Schemes {
+		names := make([]string, 0, len(entries))
+		for name := range entries {
 			names = append(names, name)
 		}
 		sort.Strings(names)
 
 		for _, name := range names {
-			s := globalCfg.Schemes[name]
-			marker := ""
+			e := entries[name]
+			marker := e.tag
 			if name == defaultScheme {
-				marker = " (default)"
+				marker += " (default)"
 			}
-			fmt.Printf("%s%s\n  fg: %s  bg: %s  cursor: %s\n", name, marker, s.Foreground, s.Background, s.Cursor)
+			fmt.Printf("%s%s\n  fg: %s  bg: %s  cursor: %s\n", name, marker, e.scheme.Foreground, e.scheme.Background, e.scheme.Cursor)
 		}
 
 		return nil
@@ -168,10 +198,38 @@ func printScheme(s *ResolvedScheme) {
 }
 
 func toAdapterScheme(s *ResolvedScheme) *adapter.ResolvedScheme {
+	extras := make(map[string]string)
+	if s.Bold != "" {
+		extras["bold"] = s.Bold
+	}
+	if s.SelectionForeground != "" {
+		extras["selection_foreground"] = s.SelectionForeground
+	}
+	if s.SelectionBackground != "" {
+		extras["selection_background"] = s.SelectionBackground
+	}
+	if s.Tab != "" {
+		extras["tab"] = s.Tab
+	}
+	if s.ItermPreset != "" {
+		extras["iterm_preset"] = s.ItermPreset
+	}
+	if s.TerminalAppProfile != "" {
+		extras["terminal_app_profile"] = s.TerminalAppProfile
+	}
+
+	// Only set Extras if there are any values
+	var extrasPtr map[string]string
+	if len(extras) > 0 {
+		extrasPtr = extras
+	}
+
 	return &adapter.ResolvedScheme{
 		Foreground: s.Foreground,
 		Background: s.Background,
 		Cursor:     s.Cursor,
 		Palette:    s.Palette,
+		Name:       s.SchemeName,
+		Extras:     extrasPtr,
 	}
 }

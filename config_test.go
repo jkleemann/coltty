@@ -181,3 +181,96 @@ func TestResolveSchemeGlobalDefault(t *testing.T) {
 		t.Errorf("expected danger foreground '#f8f8f2', got %q", resolved.Foreground)
 	}
 }
+
+func TestBuiltinSchemeResolvesWithNoGlobalConfig(t *testing.T) {
+	dirCfg := &DirConfig{Scheme: "dracula"}
+	resolved := ResolveScheme(dirCfg, nil, "/test/.coltty.toml")
+
+	if resolved.Foreground != "#f8f8f2" {
+		t.Errorf("expected dracula foreground '#f8f8f2', got %q", resolved.Foreground)
+	}
+	if resolved.Background != "#282a36" {
+		t.Errorf("expected dracula background '#282a36', got %q", resolved.Background)
+	}
+}
+
+func TestBuiltinSchemeResolvesWhenGlobalConfigLacksIt(t *testing.T) {
+	globalCfg := &GlobalConfig{
+		Schemes: map[string]Scheme{
+			"custom": {Foreground: "#111", Background: "#222", Cursor: "#333"},
+		},
+	}
+
+	dirCfg := &DirConfig{Scheme: "nord"}
+	resolved := ResolveScheme(dirCfg, globalCfg, "/test/.coltty.toml")
+
+	if resolved.Foreground != "#d8dee9" {
+		t.Errorf("expected nord foreground '#d8dee9', got %q", resolved.Foreground)
+	}
+	if resolved.Background != "#2e3440" {
+		t.Errorf("expected nord background '#2e3440', got %q", resolved.Background)
+	}
+}
+
+func TestUserDefinedSchemeOverridesBuiltin(t *testing.T) {
+	globalCfg := &GlobalConfig{
+		Schemes: map[string]Scheme{
+			"dracula": {
+				Foreground: "#custom",
+				Background: "#override",
+				Cursor:     "#user",
+			},
+		},
+	}
+
+	dirCfg := &DirConfig{Scheme: "dracula"}
+	resolved := ResolveScheme(dirCfg, globalCfg, "/test/.coltty.toml")
+
+	if resolved.Foreground != "#custom" {
+		t.Errorf("expected user foreground '#custom', got %q", resolved.Foreground)
+	}
+	if resolved.Background != "#override" {
+		t.Errorf("expected user background '#override', got %q", resolved.Background)
+	}
+}
+
+func TestBuiltinSchemesReturnsAll(t *testing.T) {
+	schemes := BuiltinSchemes()
+
+	expected := []string{
+		"gruvbox", "nord", "dracula", "solarized-dark",
+		"catppuccin", "one-dark", "rose-pine", "kanagawa",
+	}
+
+	if len(schemes) != len(expected) {
+		t.Errorf("expected %d built-in schemes, got %d", len(expected), len(schemes))
+	}
+
+	for _, name := range expected {
+		s, ok := schemes[name]
+		if !ok {
+			t.Errorf("missing built-in scheme %q", name)
+			continue
+		}
+		if s.Foreground == "" || s.Background == "" || s.Cursor == "" {
+			t.Errorf("scheme %q has empty required fields", name)
+		}
+		if len(s.Palette) != 16 {
+			t.Errorf("scheme %q has %d palette colors, expected 16", name, len(s.Palette))
+		}
+	}
+}
+
+func TestBuiltinSchemeAsGlobalDefault(t *testing.T) {
+	globalCfg := &GlobalConfig{}
+	globalCfg.Default.Scheme = "catppuccin"
+
+	resolved := ResolveScheme(nil, globalCfg, "")
+
+	if resolved.Foreground != "#cdd6f4" {
+		t.Errorf("expected catppuccin foreground '#cdd6f4', got %q", resolved.Foreground)
+	}
+	if resolved.Background != "#1e1e2e" {
+		t.Errorf("expected catppuccin background '#1e1e2e', got %q", resolved.Background)
+	}
+}

@@ -6,6 +6,8 @@ type ResolvedScheme struct {
 	Background string
 	Cursor     string
 	Palette    []string
+	Name       string            // scheme name, used by profile-based adapters
+	Extras     map[string]string // terminal-specific extended colors
 }
 
 // TerminalAdapter applies color schemes to a specific terminal emulator.
@@ -30,8 +32,27 @@ func DetectAdapter(adapters []TerminalAdapter) TerminalAdapter {
 }
 
 // AllAdapters returns all available terminal adapters.
+// Order matters: more specific adapters come first.
 func AllAdapters() []TerminalAdapter {
 	return []TerminalAdapter{
+		// macOS-specific (most specific first)
 		NewGhosttyAdapter(""),
+		NewITermAdapter(),
+		NewTerminalAppAdapter(),
+		// Cross-platform (TERM_PROGRAM detection)
+		NewAlacrittyAdapter(),
+		NewKittyAdapter(),
+		NewWezTermAdapter(),
+		NewHyperAdapter(),
+		NewTabbyAdapter(),
+		// Linux-specific (env var detection)
+		NewKonsoleAdapter(),
+		// TERM-based detection (less specific)
+		NewXtermAdapter(),
+		NewFootAdapter(),
+		NewStAdapter(),
+		NewUrxvtAdapter(),
+		// VTE catch-all (must be last — matches any VTE-based terminal)
+		NewVTEAdapter(),
 	}
 }
