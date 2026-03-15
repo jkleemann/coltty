@@ -82,6 +82,14 @@ scheme = "nord"
 background = "#1e2030"
 ```
 
+Or open the interactive picker:
+
+```bash
+coltty set
+```
+
+The picker shows a theme list on the left and a live terminal preview on the right. Use arrow keys to move, type to fuzzy-filter, `Enter` to save, `Esc` to restore the original colors and exit, `f` to toggle favorites, and `Tab` to switch between all themes and favorites.
+
 ### 3. Try it
 
 ```bash
@@ -353,7 +361,8 @@ Not supported. GNU Screen does not pass through OSC escape sequences. Coltty pri
 | `coltty apply` | Apply the scheme for the current directory |
 | `coltty apply --quiet` | Apply silently (used by the shell hook) |
 | `coltty apply --dry-run` | Print what would be applied without changing anything |
-| `coltty set <scheme>` | Set the color scheme for the current directory |
+| `coltty set` | Open the interactive theme picker for the current directory |
+| `coltty set <scheme>` | Set the color scheme for the current directory directly |
 | `coltty set <scheme> --inline` | Same, but write full color values for customization |
 | `coltty show` | Show the resolved scheme and which config matched |
 | `coltty schemes` | List all available schemes (built-in and user-defined) |
@@ -361,6 +370,26 @@ Not supported. GNU Screen does not pass through OSC escape sequences. Coltty pri
 | `coltty import <file>` | Import a theme file and print as TOML |
 | `coltty import <file> --append` | Import and add directly to global config |
 | `coltty import --list-formats` | List supported import formats |
+
+### Interactive `set` picker
+
+`coltty set` opens a full-screen picker with:
+
+- a visible fuzzy filter field
+- a scrollable theme list
+- favorites stored in `~/.config/coltty/favorites.toml`
+- best-effort usage badges from scanning `~` for named `.coltty.toml` schemes
+- a live preview with code, `less`, and markdown samples
+
+Keys:
+
+- `Up` / `Down`: move selection
+- type: fuzzy-filter theme names
+- `Backspace`: edit the filter
+- `Enter`: save the selected theme to `.coltty.toml`
+- `Esc`: clear the filter first, then cancel and restore the original colors
+- `f`: toggle favorite on the selected theme
+- `Tab`: switch between all themes and favorites
 
 ## How It Works
 
