@@ -59,3 +59,30 @@ func TestPreviewSessionConfirmAppliesFinalScheme(t *testing.T) {
 		t.Fatalf("expected confirm apply dracula, got %q", got)
 	}
 }
+
+func TestPreviewStyleRolesDeriveFromScheme(t *testing.T) {
+	scheme := BuiltinSchemes()["dracula"]
+
+	roles := newPreviewStyleRoles(scheme)
+
+	if roles.Keyword.GetForeground() == nil {
+		t.Fatal("expected keyword foreground")
+	}
+	if roles.Heading.GetForeground() == nil {
+		t.Fatal("expected heading foreground")
+	}
+}
+
+func TestPreviewStyleRolesFallbackWithoutFullPalette(t *testing.T) {
+	roles := newPreviewStyleRoles(Scheme{
+		Foreground: "#eeeeee",
+		Palette:    []string{"#111111", "#222222"},
+	})
+
+	if roles.Base.GetForeground() == nil {
+		t.Fatal("expected base foreground fallback")
+	}
+	if roles.Keyword.GetForeground() == nil {
+		t.Fatal("expected keyword foreground fallback")
+	}
+}

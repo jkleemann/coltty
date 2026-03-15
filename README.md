@@ -88,7 +88,7 @@ Or open the interactive picker:
 coltty set
 ```
 
-The picker shows a theme list on the left and a live terminal preview on the right. Use arrow keys to move, type to fuzzy-filter, `Enter` to save, `Esc` to restore the original colors and exit, `f` to toggle favorites, and `Tab` to switch between all themes and favorites.
+The picker shows a theme list on the left and a live terminal preview on the right. Moving the selection updates the preview immediately. Type to fuzzy-filter themes, press `f` to set or unset a favorite, press `Tab` to switch between all themes and favorites, press `Enter` to save the selected theme to `.coltty.toml`, and press `Esc` to restore the original colors and exit without saving.
 
 ### 3. Try it
 
@@ -379,7 +379,7 @@ Not supported. GNU Screen does not pass through OSC escape sequences. Coltty pri
 - a scrollable theme list
 - favorites stored in `~/.config/coltty/favorites.toml`
 - best-effort usage badges from scanning `~` for named `.coltty.toml` schemes
-- a live preview with code, `less`, and markdown samples
+- a live preview with code, `less`, and markdown samples that updates as you move through themes
 
 Keys:
 
@@ -388,8 +388,8 @@ Keys:
 - `Backspace`: edit the filter
 - `Enter`: save the selected theme to `.coltty.toml`
 - `Esc`: clear the filter first, then cancel and restore the original colors
-- `f`: toggle favorite on the selected theme
-- `Tab`: switch between all themes and favorites
+- `f`: set or unset the selected theme as a favorite
+- `Tab`: switch between all themes and favorites-only view
 
 ## How It Works
 

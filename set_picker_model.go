@@ -8,13 +8,14 @@ import (
 )
 
 type pickerModel struct {
-	width       int
-	height      int
-	input       textinput.Model
-	state       *PickerState
-	status      string
-	effects     pickerEffects
-	previewName string
+	width        int
+	height       int
+	input        textinput.Model
+	state        *PickerState
+	status       string
+	effects      pickerEffects
+	previewName  string
+	scrollOffset int
 }
 
 type previewSelectionMsg struct {
@@ -58,6 +59,7 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.syncScroll()
 		return m, nil
 	case previewSelectionMsg:
 		if msg.schemeName != "" {
@@ -89,11 +91,13 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyUp:
 			if m.state.MoveSelection(-1) {
+				m.syncScroll()
 				return m, emitPreviewSelection(m.state.SelectedItem().Name)
 			}
 			return m, nil
 		case tea.KeyDown:
 			if m.state.MoveSelection(1) {
+				m.syncScroll()
 				return m, emitPreviewSelection(m.state.SelectedItem().Name)
 			}
 			return m, nil
@@ -108,11 +112,13 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, emitCancelSelection()
 		case tea.KeyTab:
 			m.state.ToggleViewMode()
+			m.syncScroll()
 			return m, nil
 		case tea.KeyBackspace:
 			before := m.state.SelectedItem().Name
 			m.input, _ = m.input.Update(msg)
 			m.state.SetQuery(m.input.Value())
+			m.syncScroll()
 			if selected := m.state.SelectedItem().Name; selected != "" && selected != before {
 				return m, emitPreviewSelection(selected)
 			}
@@ -130,6 +136,7 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			before := m.state.SelectedItem().Name
 			m.input, _ = m.input.Update(msg)
 			m.state.SetQuery(m.input.Value())
+			m.syncScroll()
 			if selected := m.state.SelectedItem().Name; selected != "" && selected != before {
 				return m, emitPreviewSelection(selected)
 			}
@@ -176,4 +183,52 @@ func (m pickerModel) selectedSchemeTitle() string {
 		return "no theme selected"
 	}
 	return fmt.Sprintf("previewing %s", item.Name)
+}
+
+func (m *pickerModel) syncScroll() {
+	rows := m.listViewportHeight()
+	if rows <= 0 {
+		m.scrollOffset = 0
+		return
+	}
+	if len(m.state.Filtered) <= rows {
+		m.scrollOffset = 0
+		return
+	}
+	if m.state.Selected < m.scrollOffset {
+		m.scrollOffset = m.state.Selected
+	}
+	if m.state.Selected >= m.scrollOffset+rows {
+		m.scrollOffset = m.state.Selected - rows + 1
+	}
+	maxOffset := len(m.state.Filtered) - rows
+	if m.scrollOffset > maxOffset {
+		m.scrollOffset = maxOffset
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+}
+
+func (m pickerModel) listViewportHeight() int {
+	contentHeight := m.contentHeight()
+	headerLines := 5
+	if m.status != "" {
+		headerLines++
+	}
+	rows := contentHeight - headerLines
+	if rows < 1 {
+		return 1
+	}
+	return rows
+}
+
+func (m pickerModel) contentHeight() int {
+	if m.height <= 0 {
+		return 20
+	}
+	if m.height <= 4 {
+		return 1
+	}
+	return m.height - 4
 }

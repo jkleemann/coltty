@@ -13,6 +13,7 @@ Replace the current custom interactive `coltty set` picker implementation with a
 - transient live preview on selection change
 - `Enter` persists `.coltty.toml`
 - `Esc` clears filter first, then restores original terminal colors and exits
+- richer semantic preview styling inspired by Ghostty's own theme preview language
 
 The current custom picker is not a stable foundation. It redraws plain text manually, has no real pane layout, and mixes preview side effects into the event loop. Bubble Tea is the replacement architecture, not an optional enhancement.
 
@@ -23,6 +24,7 @@ The current custom picker is not a stable foundation. It redraws plain text manu
 - Keep preview changes reversible until the user confirms.
 - Separate in-app preview rendering from real terminal apply/restore side effects.
 - Improve maintainability by using standard TUI primitives instead of custom raw terminal control.
+- Make the preview pane visually informative rather than flat, with semantic syntax accents that show off a theme's palette.
 
 ## Non-Goals
 
@@ -61,11 +63,24 @@ The picker uses a full-screen Bubble Tea interface with two panes:
   - one integrated preview terminal, not separate cards
   - palette strip
   - large Zig code sample with varied syntax highlighting
-  - smaller `less` sample
-  - smaller markdown sample
+  - smaller `less` sample with semantic accents
+  - smaller markdown sample with lighter semantic accents
   - short help or status line
 
 The key requirement is stable composition. Content must remain anchored in panes instead of drifting or wrapping across the terminal unpredictably.
+
+### Preview Styling
+
+The right pane should not render as mostly plain text. It should use semantic color roles derived from the currently selected theme:
+
+- Zig:
+  - stronger accents for keywords, function names, builtins, strings, and important punctuation or headings
+- `less` block:
+  - semantic accents for section headers, command lines, and emphasized values
+- markdown block:
+  - lighter accents for headings, bullets, and inline-code-like fragments
+
+The target is closer to Ghostty's own preview feel: enough color structure to communicate a theme's character, but still readable and controlled.
 
 ### Preview Semantics
 
@@ -93,6 +108,7 @@ The picker model should track:
 - resolved initial scheme or inferred closest match
 - original terminal state needed for restore on cancel
 - any warning or status message shown in the UI
+- semantic preview color roles derived from the selected theme
 
 ## Favorites
 
@@ -167,6 +183,21 @@ Replace the current custom picker runtime with a Bubble Tea model that handles:
 - help and status text
 - message-driven preview side effects
 - cancel/confirm exit paths
+- semantic preview styling derived from the selected scheme
+
+### Preview Styling Helper
+
+Add a small preview-style helper that maps a selected scheme into reusable semantic roles, for example:
+
+- base text
+- muted text
+- keyword
+- function or symbol accent
+- string
+- heading
+- bullet or marker
+
+The renderer should use these roles consistently instead of hardcoding ad hoc colors into each sample line.
 
 ### Side-Effect Boundary
 
@@ -218,6 +249,7 @@ Prioritize tests around model behavior and integration boundaries:
 - transient preview apply/restore flow
 - confirm persisting `.coltty.toml` and applying the selected theme
 - Bubble Tea view output for key layout markers and pane content
+- preview styling coverage for Zig, `less`, and markdown sections
 - non-interactive fallback if the TUI cannot start
 
 Avoid overfitting tests to exact ANSI output. Prefer model-state assertions and high-signal view checks.

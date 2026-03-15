@@ -122,6 +122,46 @@ func TestPickerModelNoMatchesShowsEmptyStateWithoutDroppingPreview(t *testing.T)
 	}
 }
 
+func TestPickerModelSelectionScrollsListViewport(t *testing.T) {
+	items := []PickerItem{
+		{Name: "alpha", Scheme: BuiltinSchemes()["dracula"]},
+		{Name: "beta", Scheme: BuiltinSchemes()["dracula"]},
+		{Name: "gamma", Scheme: BuiltinSchemes()["dracula"]},
+		{Name: "delta", Scheme: BuiltinSchemes()["dracula"]},
+		{Name: "epsilon", Scheme: BuiltinSchemes()["dracula"]},
+		{Name: "zeta", Scheme: BuiltinSchemes()["dracula"]},
+		{Name: "eta", Scheme: BuiltinSchemes()["dracula"]},
+	}
+	model := newPickerModel(NewPickerState(items, "alpha"), nil)
+	next, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	model = next.(pickerModel)
+
+	for i := 0; i < 5; i++ {
+		next, _ = model.Update(tea.KeyMsg{Type: tea.KeyDown})
+		model = next.(pickerModel)
+	}
+
+	view := model.View()
+	if !strings.Contains(view, ">   zeta") && !strings.Contains(view, "> * zeta") && !strings.Contains(view, ">   eta") {
+		t.Fatalf("expected lower selection visible in viewport, got:\n%s", view)
+	}
+	if strings.Contains(view, "alpha") && strings.Contains(view, "zeta") {
+		t.Fatalf("expected top of long list to scroll out of view, got:\n%s", view)
+	}
+}
+
+func TestRenderPickerViewRespectsTerminalHeight(t *testing.T) {
+	model := newPickerModel(newPickerStateFixture(), nil)
+	model.width = 100
+	model.height = 14
+
+	rendered := renderPickerView(model)
+	lines := strings.Split(rendered, "\n")
+	if len(lines) > 14 {
+		t.Fatalf("expected render to fit terminal height, got %d lines:\n%s", len(lines), rendered)
+	}
+}
+
 func newPickerStateFixture() *PickerState {
 	return NewPickerState([]PickerItem{
 		{Name: "catppuccin"},
