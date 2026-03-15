@@ -133,6 +133,24 @@ func TestSetCommandCreatesConfig(t *testing.T) {
 	}
 }
 
+func TestSetCommandWithoutArgsStartsPicker(t *testing.T) {
+	called := false
+	old := interactiveSetRunner
+	interactiveSetRunner = func() error {
+		called = true
+		return nil
+	}
+	defer func() { interactiveSetRunner = old }()
+
+	_, _, err := executeCommand("set")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("expected interactive picker to start")
+	}
+}
+
 func TestSetCommandInline(t *testing.T) {
 	dir := t.TempDir()
 	oldDir, _ := os.Getwd()

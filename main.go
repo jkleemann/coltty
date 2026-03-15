@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/jkleemann/coltty/adapter"
@@ -144,45 +143,11 @@ var schemesCmd = &cobra.Command{
 }
 
 var setCmd = &cobra.Command{
-	Use:   "set <scheme>",
+	Use:   "set [scheme]",
 	Short: "Set the color scheme for the current directory",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		schemeName := args[0]
-
-		globalCfg, err := LoadGlobalConfig()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "coltty: warning: failed to load global config: %v\n", err)
-		}
-
-		scheme, ok := LookupScheme(schemeName, globalCfg)
-		if !ok {
-			return fmt.Errorf("unknown scheme %q (use 'coltty schemes' to list available schemes)", schemeName)
-		}
-
-		configPath := filepath.Join(".", dirConfigFile)
-
-		// Warn if overwriting existing file.
-		if _, err := os.Stat(configPath); err == nil {
-			fmt.Fprintf(os.Stderr, "coltty: overwriting existing %s\n", dirConfigFile)
-		}
-
-		if err := WriteDirSchemeConfig(configPath, schemeName, scheme, setInline); err != nil {
-			return fmt.Errorf("writing %s: %w", dirConfigFile, err)
-		}
-
-		resolved := ResolvedFromScheme(configPath, schemeName, scheme)
-		adapterScheme := toAdapterScheme(resolved)
-
-		a := adapter.DetectAdapter(adapter.AllAdapters())
-		if a != nil {
-			if err := a.Apply(adapterScheme); err != nil {
-				fmt.Fprintf(os.Stderr, "coltty: warning: %s adapter: %v\n", a.Name(), err)
-			}
-		}
-
-		fmt.Fprintf(os.Stderr, "coltty: set scheme %q in %s\n", schemeName, dirConfigFile)
-		return nil
+		return runSetCommand(args)
 	},
 }
 
