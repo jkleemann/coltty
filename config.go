@@ -33,6 +33,10 @@ type GlobalConfig struct {
 	Schemes map[string]Scheme `toml:"schemes"`
 }
 
+type FavoritesConfig struct {
+	Schemes []string `toml:"schemes"`
+}
+
 // DirConfig is a per-directory .coltty.toml file.
 type DirConfig struct {
 	Scheme    string `toml:"scheme"`
@@ -165,6 +169,9 @@ func BuiltinSchemes() map[string]Scheme {
 // globalConfigPathOverride is used for testing. If non-empty, it overrides the default path.
 var globalConfigPathOverride string
 
+// favoritesConfigPathOverride is used for testing. If non-empty, it overrides the default path.
+var favoritesConfigPathOverride string
+
 // globalConfigPath returns the path to the global config file.
 func globalConfigPath() string {
 	if globalConfigPathOverride != "" {
@@ -172,6 +179,14 @@ func globalConfigPath() string {
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", "coltty", "config.toml")
+}
+
+func favoritesConfigPath() string {
+	if favoritesConfigPathOverride != "" {
+		return favoritesConfigPathOverride
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "coltty", "favorites.toml")
 }
 
 // LoadGlobalConfig reads and parses the global config file.
@@ -195,6 +210,46 @@ func LoadGlobalConfigFrom(path string) (*GlobalConfig, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+func LoadFavorites() (*FavoritesConfig, error) {
+	data, err := os.ReadFile(favoritesConfigPath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &FavoritesConfig{}, nil
+		}
+		return nil, err
+	}
+
+	var cfg FavoritesConfig
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func SaveFavorites(cfg *FavoritesConfig) error {
+	if cfg == nil {
+		cfg = &FavoritesConfig{}
+	}
+
+	path := favoritesConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+
+	var buf []byte
+	var err error
+	if len(cfg.Schemes) == 0 {
+		buf = []byte("schemes = []\n")
+	} else {
+		buf, err = toml.Marshal(*cfg)
+		if err != nil {
+			return err
+		}
+	}
+
+	return os.WriteFile(path, buf, 0644)
 }
 
 // LoadDirConfig reads and parses a per-directory .coltty.toml file.
