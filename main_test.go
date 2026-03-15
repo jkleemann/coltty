@@ -151,6 +151,32 @@ func TestSetCommandWithoutArgsStartsPicker(t *testing.T) {
 	}
 }
 
+func TestSetCommandDirectPathStillBypassesInteractiveUI(t *testing.T) {
+	called := false
+	old := interactiveSetRunner
+	interactiveSetRunner = func() error {
+		called = true
+		return nil
+	}
+	defer func() { interactiveSetRunner = old }()
+
+	dir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldDir)
+
+	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
+	defer func() { globalConfigPathOverride = "" }()
+
+	_, _, err := executeCommand("set", "dracula")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if called {
+		t.Fatal("expected direct path to bypass interactive UI")
+	}
+}
+
 func TestSetCommandInline(t *testing.T) {
 	dir := t.TempDir()
 	oldDir, _ := os.Getwd()
