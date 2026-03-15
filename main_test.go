@@ -412,6 +412,50 @@ func TestInteractiveSetFailsClearlyWithoutTTY(t *testing.T) {
 	}
 }
 
+func TestInteractiveSetInitialSelectionUsesClosestInferredTheme(t *testing.T) {
+	dir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldDir)
+
+	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
+	defer func() { globalConfigPathOverride = "" }()
+
+	runtime := newTestPickerRuntime([]byte("\r"))
+	runtime.findDirConfig = func(string) (string, *DirConfig, error) {
+		return ".coltty.toml", &DirConfig{
+			Overrides: Scheme{
+				Foreground: "#d8dee9",
+				Background: "#2e3440",
+				Cursor:     "#d8dee9",
+				Palette:    BuiltinSchemes()["nord"].Palette,
+			},
+		}, nil
+	}
+	runtime.resolveCurrent = func(string, *GlobalConfig) (*ResolvedScheme, error) {
+		resolved := ResolvedFromScheme(".coltty.toml", "", Scheme{
+			Foreground: "#d8dee9",
+			Background: "#2e3440",
+			Cursor:     "#d8dee9",
+			Palette:    BuiltinSchemes()["nord"].Palette,
+		})
+		resolved.SchemeName = ""
+		return resolved, nil
+	}
+
+	if err := runInteractiveSetWithRuntime(runtime); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".coltty.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `scheme = "nord"`) {
+		t.Fatalf("expected inferred nord config, got:\n%s", string(data))
+	}
+}
+
 type testPreviewApplier struct {
 	applied []*ResolvedScheme
 }
@@ -423,12 +467,11 @@ func (a *testPreviewApplier) Apply(scheme *ResolvedScheme) error {
 
 func newTestPickerRuntime(input []byte) pickerRuntime {
 	return pickerRuntime{
-		stdin:   bytes.NewReader(input),
-		stdout:  &bytes.Buffer{},
-		stderr:  &bytes.Buffer{},
-		isTTY:   func() bool { return true },
-		makeRaw: func() (func(), error) { return func() {}, nil },
-		getwd:   os.Getwd,
+		stdin:  bytes.NewReader(input),
+		stdout: &bytes.Buffer{},
+		stderr: &bytes.Buffer{},
+		isTTY:  func() bool { return true },
+		getwd:  os.Getwd,
 		loadGlobalConfig: func() (*GlobalConfig, error) {
 			return nil, nil
 		},
@@ -443,7 +486,8 @@ func newTestPickerRuntime(input []byte) pickerRuntime {
 		scanUsage: func(string) (map[string]int, error) {
 			return map[string]int{}, nil
 		},
-		homeDir: func() (string, error) { return "/", nil },
-		applier: &testPreviewApplier{},
+		homeDir:      func() (string, error) { return "/", nil },
+		applier:      &testPreviewApplier{},
+		startProgram: testProgramFromInput(input),
 	}
 }
