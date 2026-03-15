@@ -2,13 +2,14 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/jkleemann/coltty/adapter"
 	"github.com/spf13/cobra"
 )
@@ -21,7 +22,6 @@ type pickerRuntime struct {
 	stderr io.Writer
 
 	isTTY   func() bool
-	makeRaw func() (func(), error)
 	getwd   func() (string, error)
 	homeDir func() (string, error)
 
@@ -32,7 +32,15 @@ type pickerRuntime struct {
 	saveFavorites    func(*FavoritesConfig) error
 	scanUsage        func(string) (map[string]int, error)
 
-	applier PreviewApplier
+	applier      PreviewApplier
+	startProgram func(pickerModel) (pickerModel, error)
+}
+
+type pickerEffects struct {
+	onPreview       func(string) error
+	onConfirm       func(string) error
+	onCancel        func() error
+	onSaveFavorites func([]string) error
 }
 
 func defaultPickerRuntime() pickerRuntime {
@@ -41,7 +49,6 @@ func defaultPickerRuntime() pickerRuntime {
 		stdout:           os.Stdout,
 		stderr:           os.Stderr,
 		isTTY:            stdinIsTTY,
-		makeRaw:          makeRawTerminal,
 		getwd:            os.Getwd,
 		homeDir:          os.UserHomeDir,
 		loadGlobalConfig: LoadGlobalConfig,
@@ -116,15 +123,6 @@ func runInteractiveSetWithRuntime(rt pickerRuntime) error {
 		return fmt.Errorf("interactive picker requires a TTY; use 'coltty set <scheme>' instead")
 	}
 
-	restoreRaw, err := rt.makeRaw()
-	if err != nil {
-		return err
-	}
-	defer restoreRaw()
-
-	fmt.Fprint(rt.stdout, "\x1b[?1049h\x1b[?25l")
-	defer fmt.Fprint(rt.stdout, "\x1b[?25h\x1b[?1049l")
-
 	globalCfg, err := rt.loadGlobalConfig()
 	if err != nil {
 		fmt.Fprintf(rt.stderr, "coltty: warning: failed to load global config: %v\n", err)
@@ -186,116 +184,49 @@ func runInteractiveSetWithRuntime(rt pickerRuntime) error {
 
 	state := NewPickerState(items, initialName)
 	preview := NewPreviewSession(rt.applier, original)
-	if item := state.SelectedItem(); item.Name != "" {
-		if err := preview.ApplySelection(ResolvedFromScheme("", item.Name, item.Scheme)); err != nil {
-			fmt.Fprintf(rt.stderr, "coltty: warning: preview apply failed: %v\n", err)
-		}
-	}
 
-	reader := bufio.NewReader(rt.stdin)
-	for {
-		fmt.Fprint(rt.stdout, "\x1b[H\x1b[2J")
-		fmt.Fprint(rt.stdout, RenderPicker(*state, 0, 0))
-
-		key, err := readPickerKey(reader)
-		if err != nil {
-			if err == io.EOF {
-				return preview.Cancel()
+	model := newPickerModel(state, nil)
+	model.effects = pickerEffects{
+		onPreview: func(name string) error {
+			item, ok := state.ItemByName(name)
+			if !ok {
+				return nil
 			}
-			return err
-		}
-
-		switch key {
-		case keyArrowUp:
-			if state.MoveSelection(-1) {
-				_ = preview.ApplySelection(ResolvedFromScheme("", state.SelectedItem().Name, state.SelectedItem().Scheme))
+			return preview.ApplySelection(ResolvedFromScheme("", item.Name, item.Scheme))
+		},
+		onConfirm: func(name string) error {
+			item, ok := state.ItemByName(name)
+			if !ok {
+				return fmt.Errorf("unknown picker selection %q", name)
 			}
-		case keyArrowDown:
-			if state.MoveSelection(1) {
-				_ = preview.ApplySelection(ResolvedFromScheme("", state.SelectedItem().Name, state.SelectedItem().Scheme))
-			}
-		case keyEnter:
-			item := state.SelectedItem()
 			configPath := filepath.Join(".", dirConfigFile)
 			if err := WriteDirSchemeConfig(configPath, item.Name, item.Scheme, setInline); err != nil {
 				return err
 			}
-			if err := preview.Confirm(ResolvedFromScheme(configPath, item.Name, item.Scheme)); err != nil {
-				return err
-			}
-			return nil
-		case keyEscape:
-			if state.Query != "" {
-				state.SetQuery("")
-				continue
-			}
-			return preview.Cancel()
-		case keyBackspace:
-			if state.Query != "" {
-				state.SetQuery(state.Query[:len(state.Query)-1])
-			}
-		case keyTab:
-			state.ToggleViewMode()
-		case keyFavorite:
-			state.ToggleFavorite()
-			if err := rt.saveFavorites(&FavoritesConfig{Schemes: state.FavoriteNames()}); err != nil {
-				fmt.Fprintf(rt.stderr, "coltty: warning: failed to save favorites: %v\n", err)
-			}
-		default:
-			if keyPrintable(key) {
-				state.SetQuery(state.Query + key)
-			}
-		}
+			return preview.Confirm(ResolvedFromScheme(configPath, item.Name, item.Scheme))
+		},
+		onCancel: preview.Cancel,
+		onSaveFavorites: func(names []string) error {
+			return rt.saveFavorites(&FavoritesConfig{Schemes: names})
+		},
 	}
-}
 
-const (
-	keyArrowUp   = "up"
-	keyArrowDown = "down"
-	keyEnter     = "enter"
-	keyEscape    = "escape"
-	keyBackspace = "backspace"
-	keyTab       = "tab"
-	keyFavorite  = "favorite"
-)
+	if rt.startProgram != nil {
+		_, err := rt.startProgram(model)
+		return err
+	}
 
-func readPickerKey(reader *bufio.Reader) (string, error) {
-	b, err := reader.ReadByte()
+	p := tea.NewProgram(
+		model,
+		tea.WithInput(rt.stdin),
+		tea.WithOutput(rt.stdout),
+		tea.WithAltScreen(),
+	)
+	_, err = p.Run()
 	if err != nil {
-		return "", err
+		return fmt.Errorf("starting picker: %w", err)
 	}
-
-	switch b {
-	case '\r', '\n':
-		return keyEnter, nil
-	case '\t':
-		return keyTab, nil
-	case 127, 8:
-		return keyBackspace, nil
-	case 'f':
-		return keyFavorite, nil
-	case 27:
-		if reader.Buffered() >= 2 {
-			next, _ := reader.ReadByte()
-			if next == '[' {
-				dir, _ := reader.ReadByte()
-				switch dir {
-				case 'A':
-					return keyArrowUp, nil
-				case 'B':
-					return keyArrowDown, nil
-				}
-			}
-			return keyEscape, nil
-		}
-		return keyEscape, nil
-	default:
-		return string(b), nil
-	}
-}
-
-func keyPrintable(key string) bool {
-	return len(key) == 1 && key[0] >= 32 && key[0] < 127
+	return nil
 }
 
 func stdinIsTTY() bool {
@@ -304,29 +235,6 @@ func stdinIsTTY() bool {
 		return false
 	}
 	return (info.Mode() & os.ModeCharDevice) != 0
-}
-
-func makeRawTerminal() (func(), error) {
-	get := exec.Command("stty", "-g")
-	get.Stdin = os.Stdin
-	state, err := get.Output()
-	if err != nil {
-		return nil, fmt.Errorf("reading terminal state: %w", err)
-	}
-
-	raw := exec.Command("stty", "raw", "-echo")
-	raw.Stdin = os.Stdin
-	if err := raw.Run(); err != nil {
-		return nil, fmt.Errorf("enabling raw mode: %w", err)
-	}
-
-	saved := string(state)
-	restore := func() {
-		restoreCmd := exec.Command("stty", saved)
-		restoreCmd.Stdin = os.Stdin
-		_ = restoreCmd.Run()
-	}
-	return restore, nil
 }
 
 func (s *PickerState) MoveSelection(delta int) bool {
@@ -356,4 +264,88 @@ func (s *PickerState) FavoriteNames() []string {
 	}
 	slices.Sort(favorites)
 	return favorites
+}
+
+func (s *PickerState) ItemByName(name string) (PickerItem, bool) {
+	for _, item := range s.Items {
+		if item.Name == name {
+			return item, true
+		}
+	}
+	return PickerItem{}, false
+}
+
+func testProgramFromInput(input []byte) func(pickerModel) (pickerModel, error) {
+	return func(model pickerModel) (pickerModel, error) {
+		current := model
+		cmds := []tea.Cmd{}
+
+		reader := bufio.NewReader(bytes.NewReader(input))
+		for {
+			for len(cmds) > 0 {
+				cmd := cmds[0]
+				cmds = cmds[1:]
+				if cmd == nil {
+					continue
+				}
+				msg := cmd()
+				if msg == nil {
+					continue
+				}
+				if _, ok := msg.(tea.QuitMsg); ok {
+					return current, nil
+				}
+				next, cmd := current.Update(msg)
+				current = next.(pickerModel)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
+
+			msg, err := readTestTeaKey(reader)
+			if err != nil {
+				if err == io.EOF {
+					return current, nil
+				}
+				return current, err
+			}
+			next, cmd := current.Update(msg)
+			current = next.(pickerModel)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+	}
+}
+
+func readTestTeaKey(reader *bufio.Reader) (tea.Msg, error) {
+	b, err := reader.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+
+	switch b {
+	case '\r', '\n':
+		return tea.KeyMsg{Type: tea.KeyEnter}, nil
+	case '\t':
+		return tea.KeyMsg{Type: tea.KeyTab}, nil
+	case 127, 8:
+		return tea.KeyMsg{Type: tea.KeyBackspace}, nil
+	case 27:
+		if reader.Buffered() >= 2 {
+			next, _ := reader.ReadByte()
+			if next == '[' {
+				dir, _ := reader.ReadByte()
+				switch dir {
+				case 'A':
+					return tea.KeyMsg{Type: tea.KeyUp}, nil
+				case 'B':
+					return tea.KeyMsg{Type: tea.KeyDown}, nil
+				}
+			}
+		}
+		return tea.KeyMsg{Type: tea.KeyEsc}, nil
+	default:
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{rune(b)}}, nil
+	}
 }
