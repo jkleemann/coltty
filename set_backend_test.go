@@ -94,3 +94,32 @@ func TestWriteDirSchemeConfigInline(t *testing.T) {
 		t.Fatal("expected dracula foreground")
 	}
 }
+
+func TestInferClosestSchemePrefersExactPaletteMatch(t *testing.T) {
+	overrides := BuiltinSchemes()["dracula"]
+
+	name, ok := InferClosestScheme(overrides, nil)
+	if !ok {
+		t.Fatal("expected a closest scheme")
+	}
+	if name != "dracula" {
+		t.Fatalf("expected dracula, got %q", name)
+	}
+}
+
+func TestInferClosestSchemeReturnsBestApproximationForOverrides(t *testing.T) {
+	overrides := Scheme{
+		Foreground: "#d7dee9",
+		Background: "#2f3440",
+		Cursor:     "#d8dee9",
+		Palette:    BuiltinSchemes()["nord"].Palette,
+	}
+
+	name, ok := InferClosestScheme(overrides, nil)
+	if !ok {
+		t.Fatal("expected a closest scheme")
+	}
+	if name != "nord" {
+		t.Fatalf("expected nord, got %q", name)
+	}
+}
