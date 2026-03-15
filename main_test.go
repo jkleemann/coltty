@@ -170,6 +170,30 @@ func TestSetCommandInline(t *testing.T) {
 	}
 }
 
+func TestSetCommandInlineStillWritesOverrides(t *testing.T) {
+	dir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldDir)
+
+	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
+	defer func() { globalConfigPathOverride = "" }()
+	defer func() { setInline = false }()
+
+	_, _, err := executeCommand("set", "dracula", "--inline")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".coltty.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "[overrides]") {
+		t.Fatal("expected inline overrides")
+	}
+}
+
 func TestSetCommandRejectsUnknown(t *testing.T) {
 	dir := t.TempDir()
 	oldDir, _ := os.Getwd()
