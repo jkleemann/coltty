@@ -97,3 +97,28 @@ background = "#222222"
 		t.Errorf("expected calm foreground '#c0caf5', got %q", resolved.Foreground)
 	}
 }
+
+func TestFindDirConfigFindsNearestConfig(t *testing.T) {
+	root := t.TempDir()
+	child := filepath.Join(root, "child")
+	grandchild := filepath.Join(child, "grandchild")
+	if err := os.MkdirAll(grandchild, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	wantPath := filepath.Join(child, ".coltty.toml")
+	if err := os.WriteFile(wantPath, []byte(`scheme = "dracula"`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	path, cfg, err := FindDirConfig(grandchild)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != wantPath {
+		t.Fatalf("expected path %q, got %q", wantPath, path)
+	}
+	if cfg == nil || cfg.Scheme != "dracula" {
+		t.Fatalf("expected dracula config, got %#v", cfg)
+	}
+}

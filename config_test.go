@@ -120,6 +120,54 @@ background = "#1e2030"
 	}
 }
 
+func TestFavoritesPathUsesColttyConfigDir(t *testing.T) {
+	favoritesConfigPathOverride = filepath.Join(t.TempDir(), "favorites.toml")
+	defer func() { favoritesConfigPathOverride = "" }()
+
+	if got := favoritesConfigPath(); got != favoritesConfigPathOverride {
+		t.Fatalf("expected favorites override path %q, got %q", favoritesConfigPathOverride, got)
+	}
+}
+
+func TestLoadFavoritesReturnsEmptyWhenMissing(t *testing.T) {
+	favoritesConfigPathOverride = filepath.Join(t.TempDir(), "missing", "favorites.toml")
+	defer func() { favoritesConfigPathOverride = "" }()
+
+	cfg, err := LoadFavorites()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg == nil {
+		t.Fatal("expected non-nil favorites config")
+	}
+	if len(cfg.Schemes) != 0 {
+		t.Fatalf("expected no favorites, got %v", cfg.Schemes)
+	}
+}
+
+func TestSaveFavoritesRoundTrip(t *testing.T) {
+	favoritesConfigPathOverride = filepath.Join(t.TempDir(), "state", "favorites.toml")
+	defer func() { favoritesConfigPathOverride = "" }()
+
+	want := &FavoritesConfig{Schemes: []string{"dracula", "nord"}}
+	if err := SaveFavorites(want); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := LoadFavorites()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Schemes) != len(want.Schemes) {
+		t.Fatalf("expected %d favorites, got %d", len(want.Schemes), len(got.Schemes))
+	}
+	for i, scheme := range want.Schemes {
+		if got.Schemes[i] != scheme {
+			t.Fatalf("expected scheme %q at index %d, got %q", scheme, i, got.Schemes[i])
+		}
+	}
+}
+
 func TestResolveSchemeWithDirConfig(t *testing.T) {
 	globalCfg := &GlobalConfig{
 		Schemes: map[string]Scheme{

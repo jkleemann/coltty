@@ -133,6 +133,24 @@ func TestSetCommandCreatesConfig(t *testing.T) {
 	}
 }
 
+func TestSetCommandWithoutArgsStartsPicker(t *testing.T) {
+	called := false
+	old := interactiveSetRunner
+	interactiveSetRunner = func() error {
+		called = true
+		return nil
+	}
+	defer func() { interactiveSetRunner = old }()
+
+	_, _, err := executeCommand("set")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("expected interactive picker to start")
+	}
+}
+
 func TestSetCommandInline(t *testing.T) {
 	dir := t.TempDir()
 	oldDir, _ := os.Getwd()
@@ -167,6 +185,30 @@ func TestSetCommandInline(t *testing.T) {
 	}
 	if !strings.Contains(content, `"#ff5555"`) {
 		t.Error("expected palette colors")
+	}
+}
+
+func TestSetCommandInlineStillWritesOverrides(t *testing.T) {
+	dir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldDir)
+
+	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
+	defer func() { globalConfigPathOverride = "" }()
+	defer func() { setInline = false }()
+
+	_, _, err := executeCommand("set", "dracula", "--inline")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".coltty.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "[overrides]") {
+		t.Fatal("expected inline overrides")
 	}
 }
 
@@ -256,5 +298,126 @@ cursor = "#user"
 	// dracula is both built-in and user-defined, so it should show (override)
 	if !strings.Contains(stdout, "(override)") {
 		t.Error("expected '(override)' marker for user-overridden built-in scheme")
+	}
+}
+
+func TestInteractiveSetEnterPersistsSelection(t *testing.T) {
+	dir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldDir)
+
+	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
+	defer func() { globalConfigPathOverride = "" }()
+
+	runtime := newTestPickerRuntime([]byte("no\r"))
+	runtime.resolveCurrent = func(string, *GlobalConfig) (*ResolvedScheme, error) {
+		return ResolvedFromScheme(".coltty.toml", "dracula", BuiltinSchemes()["dracula"]), nil
+	}
+	runtime.scanUsage = func(string) (map[string]int, error) {
+		return map[string]int{"nord": 2}, nil
+	}
+
+	if err := runInteractiveSetWithRuntime(runtime); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".coltty.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `scheme = "nord"`) {
+		t.Fatalf("expected saved nord config, got:\n%s", string(data))
+	}
+	applier := runtime.applier.(*testPreviewApplier)
+	if got := applier.applied[len(applier.applied)-1].SchemeName; got != "nord" {
+		t.Fatalf("expected final apply nord, got %q", got)
+	}
+}
+
+func TestInteractiveSetEscapeRestoresOriginalTheme(t *testing.T) {
+	runtime := newTestPickerRuntime([]byte("\x1b[B\x1b"))
+	runtime.resolveCurrent = func(string, *GlobalConfig) (*ResolvedScheme, error) {
+		return ResolvedFromScheme(".coltty.toml", "dracula", BuiltinSchemes()["dracula"]), nil
+	}
+
+	if err := runInteractiveSetWithRuntime(runtime); err != nil {
+		t.Fatal(err)
+	}
+
+	applier := runtime.applier.(*testPreviewApplier)
+	if got := applier.applied[len(applier.applied)-1].SchemeName; got != "dracula" {
+		t.Fatalf("expected restore to dracula, got %q", got)
+	}
+}
+
+func TestInteractiveSetFavoriteTogglePersistsState(t *testing.T) {
+	favoritesConfigPathOverride = filepath.Join(t.TempDir(), "favorites.toml")
+	defer func() { favoritesConfigPathOverride = "" }()
+
+	runtime := newTestPickerRuntime([]byte("f\r"))
+	runtime.resolveCurrent = func(string, *GlobalConfig) (*ResolvedScheme, error) {
+		return ResolvedFromScheme(".coltty.toml", "dracula", BuiltinSchemes()["dracula"]), nil
+	}
+
+	if err := runInteractiveSetWithRuntime(runtime); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadFavorites()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Schemes) != 1 || cfg.Schemes[0] != "dracula" {
+		t.Fatalf("expected dracula favorite, got %v", cfg.Schemes)
+	}
+}
+
+func TestInteractiveSetFailsClearlyWithoutTTY(t *testing.T) {
+	runtime := newTestPickerRuntime(nil)
+	runtime.isTTY = func() bool { return false }
+
+	err := runInteractiveSetWithRuntime(runtime)
+	if err == nil {
+		t.Fatal("expected non-tty error")
+	}
+	if !strings.Contains(err.Error(), "use 'coltty set <scheme>' instead") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+type testPreviewApplier struct {
+	applied []*ResolvedScheme
+}
+
+func (a *testPreviewApplier) Apply(scheme *ResolvedScheme) error {
+	a.applied = append(a.applied, scheme)
+	return nil
+}
+
+func newTestPickerRuntime(input []byte) pickerRuntime {
+	return pickerRuntime{
+		stdin:   bytes.NewReader(input),
+		stdout:  &bytes.Buffer{},
+		stderr:  &bytes.Buffer{},
+		isTTY:   func() bool { return true },
+		makeRaw: func() (func(), error) { return func() {}, nil },
+		getwd:   os.Getwd,
+		loadGlobalConfig: func() (*GlobalConfig, error) {
+			return nil, nil
+		},
+		findDirConfig: func(string) (string, *DirConfig, error) {
+			return "", nil, nil
+		},
+		resolveCurrent: func(string, *GlobalConfig) (*ResolvedScheme, error) {
+			return ResolvedFromScheme(".coltty.toml", "dracula", BuiltinSchemes()["dracula"]), nil
+		},
+		loadFavorites: LoadFavorites,
+		saveFavorites: SaveFavorites,
+		scanUsage: func(string) (map[string]int, error) {
+			return map[string]int{}, nil
+		},
+		homeDir: func() (string, error) { return "/", nil },
+		applier: &testPreviewApplier{},
 	}
 }

@@ -12,9 +12,22 @@ const dirConfigFile = ".coltty.toml"
 // The first one found wins. Its scheme is resolved against the global config.
 // If none is found, the global default is used.
 func Resolve(startDir string, globalCfg *GlobalConfig) (*ResolvedScheme, error) {
+	configPath, dirCfg, err := FindDirConfig(startDir)
+	if err != nil {
+		return nil, err
+	}
+	if dirCfg != nil {
+		return ResolveScheme(dirCfg, globalCfg, configPath), nil
+	}
+
+	// No .coltty.toml found anywhere; use default
+	return ResolveScheme(nil, globalCfg, ""), nil
+}
+
+func FindDirConfig(startDir string) (string, *DirConfig, error) {
 	dir, err := filepath.Abs(startDir)
 	if err != nil {
-		return nil, fmt.Errorf("resolving absolute path: %w", err)
+		return "", nil, fmt.Errorf("resolving absolute path: %w", err)
 	}
 
 	for {
@@ -24,9 +37,9 @@ func Resolve(startDir string, globalCfg *GlobalConfig) (*ResolvedScheme, error) 
 			if err != nil {
 				// Config parse error: warn and fall back to default
 				fmt.Fprintf(os.Stderr, "coltty: warning: failed to parse %s: %v\n", configPath, err)
-				return ResolveScheme(nil, globalCfg, ""), nil
+				return "", nil, nil
 			}
-			return ResolveScheme(dirCfg, globalCfg, configPath), nil
+			return configPath, dirCfg, nil
 		}
 
 		parent := filepath.Dir(dir)
@@ -36,6 +49,5 @@ func Resolve(startDir string, globalCfg *GlobalConfig) (*ResolvedScheme, error) 
 		dir = parent
 	}
 
-	// No .coltty.toml found anywhere; use default
-	return ResolveScheme(nil, globalCfg, ""), nil
+	return "", nil, nil
 }
