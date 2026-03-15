@@ -1,64 +1,77 @@
-# `coltty set` Interactive Picker Design
+# `coltty set` Bubble Tea Picker Design
 
 ## Summary
 
-Replace the current argument-only `coltty set <scheme>` flow with a default interactive picker when `coltty set` is invoked without arguments. The picker presents a Ghostty-style two-pane interface: a scrollable theme list on the left and a live preview terminal on the right. Arrow-key navigation updates the in-app preview only. Pressing `Enter` persists the selected theme to `.coltty.toml` and applies it. Pressing `Esc` cancels and restores the terminal colors that were active before entering the picker.
+Replace the current custom interactive `coltty set` picker implementation with a Bubble Tea based TUI while preserving the full approved feature scope:
 
-The existing `coltty set <scheme>` command remains available as the non-interactive path for scripts and direct usage.
+- default interactive picker on `coltty set`
+- direct `coltty set <scheme>` path unchanged
+- visible fuzzy filter
+- favorites and `all` / `favorites` toggle
+- usage badges from scanning `~`
+- initial selection from named scheme or closest inferred theme
+- transient live preview on selection change
+- `Enter` persists `.coltty.toml`
+- `Esc` clears filter first, then restores original terminal colors and exits
+
+The current custom picker is not a stable foundation. It redraws plain text manually, has no real pane layout, and mixes preview side effects into the event loop. Bubble Tea is the replacement architecture, not an optional enhancement.
 
 ## Goals
 
-- Make `coltty set` discoverable and pleasant for interactive theme selection.
-- Provide a richer preview than the current `coltty schemes` output.
+- Make `coltty set` behave like a real TUI, with stable panes and predictable redraws.
+- Preserve the existing approved feature set without regressing interaction behavior.
 - Keep preview changes reversible until the user confirms.
-- Support large theme collections with visible fuzzy filtering.
-- Add lightweight preference features through favorites and usage badges.
+- Separate in-app preview rendering from real terminal apply/restore side effects.
+- Improve maintainability by using standard TUI primitives instead of custom raw terminal control.
 
 ## Non-Goals
 
 - Changing the semantics of `coltty set <scheme>`.
+- Reducing scope to a minimal picker first and adding features back later.
 - Reordering the main list based on usage counts.
-- Building a general-purpose theme browser outside the terminal picker.
 - Making home-directory usage scanning a hard dependency for opening the picker.
 
 ## CLI Behavior
 
-- `coltty set` opens the interactive picker.
+- `coltty set` opens the Bubble Tea picker.
 - `coltty set <scheme>` keeps the current direct-write behavior.
 - In picker mode:
-  - `Up`/`Down` moves selection.
-  - Typing updates a visible fuzzy filter query.
-  - `Backspace` edits the query.
-  - `Enter` writes `.coltty.toml` and applies the chosen theme.
-  - `Esc` clears the active filter first; if the filter is empty, it cancels and restores the original colors.
-  - `f` toggles favorite status for the selected theme.
-  - `Tab` switches the left pane between `all` and `favorites`.
+  - arrow keys move selection
+  - typing updates a visible fuzzy filter field
+  - `Backspace` edits the filter
+  - `Enter` writes `.coltty.toml` and applies the chosen theme
+  - `Esc` clears the active filter first; if the filter is empty, it cancels and restores the original colors
+  - `f` toggles favorite status for the selected theme
+  - `Tab` switches between `all` and `favorites`
 
 ## User Experience
 
 ### Layout
 
-The picker uses a full-screen terminal UI with two panes:
+The picker uses a full-screen Bubble Tea interface with two panes:
 
 - Left pane:
-  - visible `Filter:` line
-  - scrollable list of scheme names
+  - visible filter input
+  - current mode indicator
+  - scrollable theme list
   - favorite marker
-  - optional usage badge such as `used in 7 dirs`
-  - active selection highlight
+  - usage badge such as `used in 7 dirs`
+  - stable active selection highlight
 - Right pane:
   - one integrated preview terminal, not separate cards
   - palette strip
   - large Zig code sample with varied syntax highlighting
   - smaller `less` sample
   - smaller markdown sample
-  - brief shell/status lines that reinforce preview behavior
+  - short help or status line
+
+The key requirement is stable composition. Content must remain anchored in panes instead of drifting or wrapping across the terminal unpredictably.
 
 ### Preview Semantics
 
-- Moving selection repaints only the in-app preview.
-- Preview changes are transient.
-- `Enter` persists and then applies the final choice to the real terminal.
+- Moving selection applies a transient real terminal preview and updates the right pane view.
+- Preview changes remain transient until `Enter`.
+- `Enter` persists and leaves the final theme applied.
 - `Esc` restores the colors active before launching the picker.
 
 ### Initial Selection
@@ -68,24 +81,25 @@ The picker uses a full-screen terminal UI with two panes:
 
 ## Data Model
 
-The picker state should track:
+The picker model should track:
 
-- complete scheme list from built-in and user-defined schemes
-- current filter query
-- filtered match list and ranking
-- current selection index
-- current view mode: `all` or `favorites`
+- all available schemes from built-in and user-defined sources
+- filter input state
+- filtered and ranked results
+- current selection
+- current mode: `all` or `favorites`
 - favorites set
 - usage metadata keyed by scheme name
-- initial resolved scheme or inferred closest match
-- snapshot needed to restore terminal state and colors on cancel
+- resolved initial scheme or inferred closest match
+- original terminal state needed for restore on cancel
+- any warning or status message shown in the UI
 
 ## Favorites
 
 - Favorites are stored separately from user theme definitions in `~/.config/coltty/favorites.toml`.
-- The file is UI state, not configuration for scheme definitions.
-- Favorites can be toggled from the picker with `f`.
-- `Tab` switches between all schemes and favorites-only view.
+- The file is UI state, not theme definition.
+- Favorites can be toggled with `f`.
+- `Tab` switches between all themes and favorites-only view.
 
 ## Filtering
 
@@ -93,32 +107,42 @@ The picker state should track:
 - Matching is case-insensitive fuzzy matching on scheme names.
 - Ranking should prefer exact prefix matches first, then stronger fuzzy matches, then weaker matches.
 - If the current selection is filtered out, move selection to the top remaining match.
-- When there are no matches, keep the current preview stable until a valid selection exists again.
+- If there are no matches, the UI should show that state clearly and keep the current preview stable until a valid selection exists again.
 
 ## Current Theme Resolution
 
 ### Named Scheme
 
-If `.coltty.toml` refers to a named scheme, resolve it directly from the same lookup logic used by the existing `set` command.
+If `.coltty.toml` refers to a named scheme, resolve it directly from the same lookup logic used by the existing direct `set` path.
 
 ### Inline Overrides
 
-If `.coltty.toml` uses inline colors, compute the closest known theme and initialize the picker selection to that theme. This is approximate and should be surfaced in the picker state as inferred rather than exact.
+If `.coltty.toml` uses inline colors, compute the closest known theme and initialize the picker selection to that theme. This is approximate and should be surfaced in picker state as inferred rather than exact.
 
 ## Usage Metadata
 
 - Scan under `~` for `.coltty.toml` usage data.
 - Usage counts are secondary metadata only and are displayed as badges.
 - Usage data must not change primary ordering logic.
-- If the scan fails, is too slow, or is unavailable, the picker still opens without badges.
+- If the scan fails or is unavailable, the picker still opens without badges.
 
 ## Architecture
 
-Recommended approach: build a thin full-screen TUI over reusable command logic.
+Recommended approach: Bubble Tea with `bubbles` and `lipgloss`.
 
-### Shared backend extraction
+### Dependencies
 
-Refactor the current `set` implementation in `main.go` into reusable functions for:
+Add:
+
+- `github.com/charmbracelet/bubbletea`
+- `github.com/charmbracelet/bubbles`
+- `github.com/charmbracelet/lipgloss`
+
+These are justified because the current problem is primarily one of terminal UI architecture, not business logic.
+
+### Shared Backend
+
+Keep and reuse the existing backend helpers for:
 
 - scheme enumeration
 - scheme lookup
@@ -126,63 +150,89 @@ Refactor the current `set` implementation in `main.go` into reusable functions f
 - inline override nearest-match inference
 - `.coltty.toml` persistence
 - final adapter application
+- favorites persistence
+- usage scanning
 
-This preserves one backend for both `coltty set <scheme>` and the interactive picker.
+The direct and interactive `set` paths should continue to share this backend.
 
-### Picker layer
+### Bubble Tea Picker Layer
 
-Add a picker-focused unit that handles:
+Replace the current custom picker runtime with a Bubble Tea model that handles:
 
-- terminal lifecycle
-- input handling
-- fuzzy filtering
-- rendering
-- favorites load/save
-- usage scan and badge attachment
-- transient preview application
-- terminal restore on cancel or exit
+- window sizing
+- filter input widget
+- list state and selection
+- favorites and view-mode toggling
+- preview view rendering
+- help and status text
+- message-driven preview side effects
+- cancel/confirm exit paths
 
-Keep packages flat unless a new package boundary is justified by cohesion.
+### Side-Effect Boundary
+
+Keep preview application and restore logic behind a narrow interface so the Bubble Tea update loop remains testable. The model should emit intent, while a small integration layer performs:
+
+- transient apply on selection change
+- restore on cancel
+- final apply on confirm
+- persistence of favorites and `.coltty.toml`
+
+### Removal of Custom Picker Path
+
+The manual raw-terminal code path should be removed once the Bubble Tea picker is in place. Reusing the current plain-text renderer or custom ANSI layout path would preserve the existing root cause.
 
 ## Terminal Lifecycle
 
-The picker should:
+Bubble Tea should own terminal setup and teardown rather than the current custom `stty raw` path.
+
+Requirements:
 
 - enter alternate screen mode
-- hide and restore the cursor
-- repeatedly render without corrupting the user shell
-- restore terminal state on normal exit and best-effort interrupt paths
+- handle resize cleanly
+- hide and restore cursor correctly
 - restore original colors on cancel
+- leave the confirmed theme applied on `Enter`
 
-If the terminal environment does not support required interactive behavior, fail clearly and direct the user to `coltty set <scheme>`.
+If interactive terminal features are unavailable, fail clearly and direct the user to `coltty set <scheme>`.
 
 ## Error Handling
 
 - Failure to load usage metadata should degrade gracefully.
 - Failure to load favorites should warn and continue with an empty favorites set.
 - Failure to save favorites should surface a warning without corrupting picker state.
-- Failure to apply transient preview should surface as an in-picker warning if possible; the picker should remain usable.
+- Failure to apply transient preview should surface as an in-app warning if possible; the picker should remain usable.
 - Failure to persist the final choice should leave the original config unchanged.
+- Failure to start the Bubble Tea program should fail clearly and point the user to the direct `set <scheme>` fallback.
 
 ## Testing
 
-Prioritize tests around state transitions and shared backend behavior:
+Prioritize tests around model behavior and integration boundaries:
 
 - fuzzy matching and ranking
 - filter editing and no-match handling
 - selection movement on filtered result sets
-- favorites file load/save and toggle behavior
+- favorites toggle and persistence
 - view switching between `all` and `favorites`
 - current named-scheme resolution
 - nearest-known-theme inference for inline overrides
-- cancel restoring previous colors
+- transient preview apply/restore flow
 - confirm persisting `.coltty.toml` and applying the selected theme
+- Bubble Tea view output for key layout markers and pane content
+- non-interactive fallback if the TUI cannot start
 
-UI rendering tests can stay lighter and focus on high-signal snapshots or specific string expectations. The main behavioral coverage should live below the renderer.
+Avoid overfitting tests to exact ANSI output. Prefer model-state assertions and high-signal view checks.
+
+## Workflow Note
+
+User requested an agent guidance rule at `~/AGENTS.md`:
+
+- when a task involves building or replacing a terminal UI, explicitly ask whether the project should use Bubble Tea components
+- recommend Bubble Tea by default for Go TUI work unless there is a concrete reason not to
+
+At the time of writing this spec, `/Users/jkleemann/AGENTS.md` does not exist. Creating or updating that file should be included in the implementation planning scope for this change.
 
 ## Rollout Notes
 
 - Keep the non-interactive path unchanged to avoid breaking scripts.
-- Treat favorites as v1 scope.
-- Treat usage badges as best-effort metadata in v1.
-- Do not make usage-based ordering part of the first implementation.
+- Preserve full feature scope in the Bubble Tea rewrite; do not cut favorites, usage badges, or inferred initial selection from v1.
+- Treat the current custom picker implementation as disposable once the Bubble Tea version is working.
