@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
@@ -60,15 +61,15 @@ Outputs TOML to stdout by default. Use --append to write directly to the global 
 			return err
 		}
 
+		usedNames := make(map[string]bool)
+
 		name := importName
 		if name == "" {
 			if detectedName != "" {
 				name = strings.ToLower(strings.ReplaceAll(detectedName, " ", "-"))
+				name = resolveNameCollision(name, usedNames)
 			} else {
-				// Derive from filename.
-				base := filepath.Base(path)
-				name = strings.TrimSuffix(base, filepath.Ext(base))
-				name = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+				name = deriveSchemeName(path, usedNames)
 			}
 		}
 
@@ -207,6 +208,41 @@ func appendToGlobalConfig(name string, scheme Scheme) error {
 	return nil
 }
 
+// deriveSchemeName sanitizes a file path into a scheme name and resolves
+// collisions against the used map by appending an incrementing counter.
+func deriveSchemeName(path string, used map[string]bool) string {
+	base := filepath.Base(path)
+	base = strings.TrimSuffix(base, filepath.Ext(base))
+	var b strings.Builder
+	for _, r := range base {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) {
+			b.WriteRune(unicode.ToLower(r))
+		}
+	}
+	if b.Len() == 0 {
+		return resolveNameCollision("imported", used)
+	}
+	return resolveNameCollision(b.String(), used)
+}
+
+// resolveNameCollision checks if a name is already used and appends a counter
+// until a unique name is found. The chosen name is marked as used.
+func resolveNameCollision(name string, used map[string]bool) string {
+	if !used[name] {
+		used[name] = true
+		return name
+	}
+	counter := 2
+	for {
+		candidate := fmt.Sprintf("%s-%d", name, counter)
+		if !used[candidate] {
+			used[candidate] = true
+			return candidate
+		}
+		counter++
+	}
+}
+
 func newImportCmd() *cobra.Command {
 	var importFormat string
 	var importName string
@@ -253,14 +289,15 @@ Outputs TOML to stdout by default. Use --append to write directly to the global 
 				return err
 			}
 
+			usedNames := make(map[string]bool)
+
 			name := importName
 			if name == "" {
 				if detectedName != "" {
 					name = strings.ToLower(strings.ReplaceAll(detectedName, " ", "-"))
+					name = resolveNameCollision(name, usedNames)
 				} else {
-					base := filepath.Base(path)
-					name = strings.TrimSuffix(base, filepath.Ext(base))
-					name = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+					name = deriveSchemeName(path, usedNames)
 				}
 			}
 

@@ -454,3 +454,22 @@ func TestFormatSchemeTomlExtendedColors(t *testing.T) {
 		t.Error("expected tab color")
 	}
 }
+
+func TestDeriveSchemeNameCollision(t *testing.T) {
+	used := make(map[string]bool)
+
+	name1 := deriveSchemeName("Solarized Dark.json", used)
+	if name1 != "solarizeddark" {
+		t.Errorf("expected 'solarizeddark', got %q", name1)
+	}
+
+	name2 := deriveSchemeName("solarized-dark.json", used)
+	if name2 != "solarizeddark-2" {
+		t.Errorf("expected 'solarizeddark-2', got %q", name2)
+	}
+
+	name3 := deriveSchemeName("Solarized_Dark.yml", used)
+	if name3 != "solarizeddark-3" {
+		t.Errorf("expected 'solarizeddark-3', got %q", name3)
+	}
+}
