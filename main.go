@@ -54,6 +54,10 @@ var applyCmd = &cobra.Command{
 			return err
 		}
 
+		if err := resolved.Validate(); err != nil {
+			fmt.Fprintf(os.Stderr, "coltty: warning: %v\n", err)
+		}
+
 		if applyDryRun {
 			printScheme(resolved)
 			return nil

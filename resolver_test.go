@@ -100,7 +100,7 @@ background = "#222222"
 	}
 }
 
-func TestResolveWarnsOnInvalidHex(t *testing.T) {
+func TestResolveDoesNotWarnOnInvalidHex(t *testing.T) {
 	dir := t.TempDir()
 
 	config := `
@@ -144,10 +144,7 @@ background = ";\\033]1337;..."
 	if resolved.Background != ";\\033]1337;..." {
 		t.Errorf("expected invalid background to still be set, got %q", resolved.Background)
 	}
-	if stderrOutput == "" {
-		t.Error("expected warning on stderr for invalid hex, got nothing")
-	}
-	if !bytes.Contains([]byte(stderrOutput), []byte("warning")) {
-		t.Errorf("expected stderr to contain 'warning', got: %q", stderrOutput)
+	if stderrOutput != "" {
+		t.Errorf("expected no warning from Resolve(), got: %q", stderrOutput)
 	}
 }

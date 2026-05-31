@@ -45,9 +45,5 @@ func Resolve(startDir string, globalCfg *GlobalConfig) (*ResolvedScheme, error) 
 		scheme = ResolveScheme(nil, globalCfg, "")
 	}
 
-	if err := scheme.Validate(); err != nil {
-		fmt.Fprintf(os.Stderr, "coltty: warning: %v\n", err)
-	}
-
 	return scheme, nil
 }

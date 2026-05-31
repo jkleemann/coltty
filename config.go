@@ -255,7 +255,7 @@ func ResolveScheme(dirCfg *DirConfig, globalCfg *GlobalConfig, source string) *R
 
 	if dirCfg == nil {
 		// No per-directory config; use global default
-		base = getDefaultScheme(globalCfg)
+		base, _ = getDefaultScheme(globalCfg)
 		if globalCfg != nil {
 			schemeName = globalCfg.Default.Scheme
 		}
@@ -297,19 +297,32 @@ func ResolveScheme(dirCfg *DirConfig, globalCfg *GlobalConfig, source string) *R
 	}
 }
 
-func getDefaultScheme(globalCfg *GlobalConfig) Scheme {
+func getDefaultScheme(globalCfg *GlobalConfig) (Scheme, bool) {
 	if globalCfg == nil {
-		return hardcodedDefault
+		return hardcodedDefault, true
 	}
 	if globalCfg.Default.Scheme != "" {
 		if s, ok := globalCfg.Schemes[globalCfg.Default.Scheme]; ok {
-			return s
+			return s, false
 		}
 		if s, ok := builtinSchemes[globalCfg.Default.Scheme]; ok {
-			return s
+			return s, true
 		}
 	}
-	return hardcodedDefault
+	return hardcodedDefault, true
+}
+
+func hasOverrides(overrides Scheme) bool {
+	return overrides.Foreground != "" ||
+		overrides.Background != "" ||
+		overrides.Cursor != "" ||
+		len(overrides.Palette) > 0 ||
+		overrides.Bold != "" ||
+		overrides.SelectionForeground != "" ||
+		overrides.SelectionBackground != "" ||
+		overrides.Tab != "" ||
+		overrides.ItermPreset != "" ||
+		overrides.TerminalAppProfile != ""
 }
 
 func applyOverrides(base, overrides Scheme) Scheme {
