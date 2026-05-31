@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -73,6 +74,53 @@ func TestApplyDryRun(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "Source:") {
 		t.Error("expected scheme output in dry-run mode")
+	}
+}
+
+func TestApplyCommandNoTerminalDetected(t *testing.T) {
+	dir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldDir)
+
+	_, stderr, err := executeCommand(newTestRootCmd(), "apply")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if runtime.GOOS == "darwin" {
+		// On macOS, Terminal.app is always detected. The adapter may fail
+		// if the scheme lacks a profile name, producing a warning.
+		if !strings.Contains(stderr, "terminal.app") && !strings.Contains(stderr, "applied scheme") {
+			t.Errorf("expected terminal.app-related output on stderr, got: %s", stderr)
+		}
+	} else {
+		if !strings.Contains(stderr, "no supported terminal detected") {
+			t.Errorf("expected 'no supported terminal detected' warning on stderr, got: %s", stderr)
+		}
+	}
+}
+
+func TestApplyCommandNoTerminalQuiet(t *testing.T) {
+	dir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(oldDir)
+
+	_, stderr, err := executeCommand(newTestRootCmd(), "apply", "--quiet")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if runtime.GOOS == "darwin" {
+		// On macOS, quiet mode should suppress terminal.app warnings too.
+		if strings.Contains(stderr, "terminal.app") {
+			t.Error("quiet mode should suppress terminal.app warnings")
+		}
+	} else {
+		if strings.Contains(stderr, "no supported terminal detected") {
+			t.Error("quiet mode should suppress 'no supported terminal detected' warning")
+		}
 	}
 }
 
