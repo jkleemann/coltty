@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -107,6 +108,63 @@ func TestTerminalAppApplyNoName(t *testing.T) {
 	err := a.Apply(scheme)
 	if err == nil {
 		t.Error("expected error when no scheme name is set")
+	}
+}
+
+func TestTerminalAppApplyEmptyProfile(t *testing.T) {
+	a := &TerminalAppAdapter{
+		RunAppleScript: func(script string) error {
+			t.Fatal("should not have been called")
+			return nil
+		},
+	}
+
+	scheme := &ResolvedScheme{}
+
+	err := a.Apply(scheme)
+	if err == nil {
+		t.Error("expected error when profile is empty")
+	}
+}
+
+func TestTerminalAppApplyRunnerError(t *testing.T) {
+	a := &TerminalAppAdapter{
+		RunAppleScript: func(script string) error {
+			return fmt.Errorf("applescript failed")
+		},
+	}
+
+	scheme := &ResolvedScheme{
+		Name:       "test",
+		Foreground: "#ffffff",
+		Background: "#000000",
+	}
+
+	err := a.Apply(scheme)
+	if err == nil {
+		t.Error("expected error when runner fails")
+	}
+	if !strings.Contains(err.Error(), "applescript failed") {
+		t.Errorf("expected runner error, got: %v", err)
+	}
+}
+
+func TestTerminalAppApplyScriptError(t *testing.T) {
+	a := &TerminalAppAdapter{
+		RunAppleScript: func(script string) error {
+			t.Fatal("should not have been called")
+			return nil
+		},
+	}
+
+	scheme := &ResolvedScheme{
+		Name:       "test",
+		Foreground: "not-a-color",
+	}
+
+	err := a.Apply(scheme)
+	if err == nil {
+		t.Error("expected error when BuildTerminalAppApplyScript fails")
 	}
 }
 

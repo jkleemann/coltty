@@ -110,3 +110,16 @@ func TestITermApplyWithPreset(t *testing.T) {
 		t.Errorf("expected SetPreset sequence, got: %q", got)
 	}
 }
+
+func TestITermApplyEmitError(t *testing.T) {
+	a := &ITermAdapter{Emitter: OSCEmitter{Writer: &errorWriter{}}}
+
+	scheme := &ResolvedScheme{
+		Foreground: "#ffffff",
+		Background: "#000000",
+	}
+
+	if err := a.Apply(scheme); err == nil {
+		t.Error("expected error when Emit fails")
+	}
+}

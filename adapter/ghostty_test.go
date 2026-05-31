@@ -1,11 +1,18 @@
 package adapter
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+type errorWriter struct{}
+
+func (e *errorWriter) Write(p []byte) (n int, err error) {
+	return 0, fmt.Errorf("write failed")
+}
 
 func TestGhosttyDetect(t *testing.T) {
 	g := NewGhosttyAdapter("")
@@ -108,6 +115,44 @@ func TestGhosttyApplyWriteFragmentError(t *testing.T) {
 
 	if err := g.Apply(scheme); err == nil {
 		t.Error("expected error when writeFragment fails")
+	}
+}
+
+func TestGhosttyApplyFragmentError(t *testing.T) {
+	// Use a read-only directory to force writeFragment to fail.
+	dir := t.TempDir()
+	readOnlyDir := filepath.Join(dir, "readonly")
+	if err := os.Mkdir(readOnlyDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(readOnlyDir, 0755) // cleanup for temp dir removal
+
+	fragmentPath := filepath.Join(readOnlyDir, "ghostty-colors")
+	g := NewGhosttyAdapter(fragmentPath)
+
+	scheme := &ResolvedScheme{
+		Foreground: "#ffffff",
+		Background: "#000000",
+	}
+
+	if err := g.Apply(scheme); err == nil {
+		t.Error("expected error when writeFragment fails")
+	}
+}
+
+func TestGhosttyApplyEmitError(t *testing.T) {
+	dir := t.TempDir()
+	fragmentPath := filepath.Join(dir, "ghostty-colors")
+	g := NewGhosttyAdapter(fragmentPath)
+	g.Emitter = OSCEmitter{Writer: &errorWriter{}}
+
+	scheme := &ResolvedScheme{
+		Foreground: "#ffffff",
+		Background: "#000000",
+	}
+
+	if err := g.Apply(scheme); err == nil {
+		t.Error("expected error when Emit fails")
 	}
 }
 
