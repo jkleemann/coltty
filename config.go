@@ -199,21 +199,28 @@ func BuiltinSchemes() map[string]Scheme {
 var globalConfigPathOverride string
 
 // globalConfigPath returns the path to the global config file.
-func globalConfigPath() string {
+func globalConfigPath() (string, error) {
 	if globalConfigPathOverride != "" {
-		return globalConfigPathOverride
+		return globalConfigPathOverride, nil
 	}
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "coltty", "config.toml")
+		return filepath.Join(xdg, "coltty", "config.toml"), nil
 	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "coltty", "config.toml")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	return filepath.Join(home, ".config", "coltty", "config.toml"), nil
 }
 
 // LoadGlobalConfig reads and parses the global config file.
 // Returns nil with no error if the file doesn't exist.
 func LoadGlobalConfig() (*GlobalConfig, error) {
-	return LoadGlobalConfigFrom(globalConfigPath())
+	path, err := globalConfigPath()
+	if err != nil {
+		return nil, err
+	}
+	return LoadGlobalConfigFrom(path)
 }
 
 // LoadGlobalConfigFrom reads and parses a global config from a specific path.

@@ -390,7 +390,10 @@ func TestGlobalConfigPathRespectsXDG(t *testing.T) {
 		}
 	}()
 
-	path := globalConfigPath()
+	path, err := globalConfigPath()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	expected := filepath.Join(xdgDir, "coltty", "config.toml")
 	if path != expected {
 		t.Errorf("expected %q when XDG_CONFIG_HOME is set, got %q", expected, path)
@@ -398,11 +401,33 @@ func TestGlobalConfigPathRespectsXDG(t *testing.T) {
 
 	// Case 2: XDG_CONFIG_HOME is unset — should fall back to ~/.config.
 	os.Unsetenv("XDG_CONFIG_HOME")
-	path = globalConfigPath()
+	path, err = globalConfigPath()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	home, _ := os.UserHomeDir()
 	expected = filepath.Join(home, ".config", "coltty", "config.toml")
 	if path != expected {
 		t.Errorf("expected %q when XDG_CONFIG_HOME is unset, got %q", expected, path)
+	}
+}
+
+func TestGlobalConfigPathError(t *testing.T) {
+	// Simulate a scenario where home dir cannot be determined.
+	// We can't easily make os.UserHomeDir fail, but we can verify
+	// the function signature accepts returning an error.
+	oldOverride := globalConfigPathOverride
+	globalConfigPathOverride = ""
+	defer func() { globalConfigPathOverride = oldOverride }()
+
+	// With override set, it should never error.
+	globalConfigPathOverride = "/tmp/test-config.toml"
+	path, err := globalConfigPath()
+	if err != nil {
+		t.Fatalf("override path should not error: %v", err)
+	}
+	if path != "/tmp/test-config.toml" {
+		t.Errorf("expected override path, got %q", path)
 	}
 }
 

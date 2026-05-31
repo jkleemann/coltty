@@ -158,7 +158,10 @@ func appendToGlobalConfig(name string, scheme Scheme) error {
 	appendToGlobalConfigMu.Lock()
 	defer appendToGlobalConfigMu.Unlock()
 
-	configPath := globalConfigPath()
+	configPath, err := globalConfigPath()
+	if err != nil {
+		return fmt.Errorf("resolving global config path: %w", err)
+	}
 
 	cfg, err := LoadGlobalConfig()
 	if err != nil {
