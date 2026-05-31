@@ -61,14 +61,22 @@ existing profiles are updated in place.`,
 		var created int
 		for _, name := range names {
 			s := schemes[name]
+			profile := name
+			if s.TerminalAppProfile != "" {
+				profile = s.TerminalAppProfile
+			}
 			adapterScheme := &adapter.ResolvedScheme{
 				Foreground: s.Foreground,
 				Background: s.Background,
 				Cursor:     s.Cursor,
 				Name:       name,
+				Extras:     map[string]string{},
+			}
+			if s.TerminalAppProfile != "" {
+				adapterScheme.Extras["terminal_app_profile"] = s.TerminalAppProfile
 			}
 
-			script, err := adapter.BuildTerminalAppSetupScript(name, adapterScheme)
+			script, err := adapter.BuildTerminalAppSetupScript(profile, adapterScheme)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "\u2717 %s: %v\n", name, err)
 				continue

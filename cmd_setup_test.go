@@ -52,6 +52,51 @@ func TestSetupTerminalAppCommand(t *testing.T) {
 	}
 }
 
+func TestSetupTerminalAppRespectsProfile(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "config.toml")
+
+	config := `
+[schemes.my-scheme]
+foreground = "#d0d0d0"
+background = "#1a1a1a"
+cursor = "#ff0000"
+terminal_app_profile = "CustomProfile"
+`
+	os.WriteFile(configPath, []byte(config), 0644)
+
+	globalConfigPathOverride = configPath
+	defer func() { globalConfigPathOverride = "" }()
+
+	var scripts []string
+	setupRunAppleScript = func(script string) error {
+		scripts = append(scripts, script)
+		return nil
+	}
+	defer func() { setupRunAppleScript = nil }()
+
+	_, _, err := executeCommand("setup", "terminal-app")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Find the script for my-scheme and verify it uses CustomProfile.
+	var found bool
+	for _, script := range scripts {
+		if strings.Contains(script, `"CustomProfile"`) {
+			found = true
+			// Make sure it does NOT use the scheme name as the profile.
+			if strings.Contains(script, `"my-scheme"`) && strings.Contains(script, `settings set "my-scheme"`) {
+				t.Errorf("expected profile name CustomProfile, not scheme name my-scheme in script:\n%s", script)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("expected a script using 'CustomProfile' as the profile name")
+	}
+}
+
 func TestSetupTerminalAppWithUserSchemes(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.toml")
