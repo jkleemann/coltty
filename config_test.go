@@ -153,6 +153,39 @@ func TestResolveSchemeWithDirConfig(t *testing.T) {
 	}
 }
 
+func TestResolveSchemeEmptyNameWithOverrides(t *testing.T) {
+	globalCfg := &GlobalConfig{
+		Schemes: map[string]Scheme{
+			"calm": {
+				Foreground: "#c0caf5",
+				Background: "#1a1b26",
+				Cursor:     "#c0caf5",
+				Palette:    []string{"#15161e", "#f7768e"},
+			},
+		},
+	}
+	globalCfg.Default.Scheme = "calm"
+
+	dirCfg := &DirConfig{
+		Scheme: "",
+		Overrides: Scheme{
+			Background: "#1e2030",
+		},
+	}
+
+	resolved := ResolveScheme(dirCfg, globalCfg, "/test/.coltty.toml")
+
+	if resolved.Foreground != "#c0caf5" {
+		t.Errorf("expected default foreground '#c0caf5', got %q", resolved.Foreground)
+	}
+	if resolved.Background != "#1e2030" {
+		t.Errorf("expected overridden background '#1e2030', got %q", resolved.Background)
+	}
+	if resolved.SchemeName != "" {
+		t.Errorf("expected empty scheme name, got %q", resolved.SchemeName)
+	}
+}
+
 func TestResolveSchemeDefault(t *testing.T) {
 	resolved := ResolveScheme(nil, nil, "")
 

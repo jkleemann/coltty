@@ -276,6 +276,9 @@ func ResolveScheme(dirCfg *DirConfig, globalCfg *GlobalConfig, source string) *R
 					base = s
 				}
 			}
+		} else if hasOverrides(dirCfg.Overrides) {
+			// Empty scheme name with overrides: start from global default
+			base, _ = getDefaultScheme(globalCfg)
 		}
 		// Apply overrides
 		base = applyOverrides(base, dirCfg.Overrides)
