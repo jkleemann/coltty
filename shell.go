@@ -9,8 +9,10 @@ func ShellHook(shell string) (string, error) {
 		return zshHook(), nil
 	case "bash":
 		return bashHook(), nil
+	case "fish":
+		return fishHook(), nil
 	default:
-		return "", fmt.Errorf("unsupported shell: %s (supported: zsh, bash)", shell)
+		return "", fmt.Errorf("unsupported shell: %s (supported: zsh, bash, fish)", shell)
 	}
 }
 
@@ -32,5 +34,14 @@ func bashHook() string {
 if [[ ! "$PROMPT_COMMAND" =~ __coltty_prompt_command ]]; then
     PROMPT_COMMAND="__coltty_prompt_command;${PROMPT_COMMAND}"
 fi
+`
+}
+
+func fishHook() string {
+	return `if not functions --query coltty_chpwd
+    function coltty_chpwd --on-variable PWD
+        coltty apply --quiet 2>/dev/null
+    end
+end
 `
 }

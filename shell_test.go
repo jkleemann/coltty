@@ -76,8 +76,28 @@ func TestBashHookOnlyRunsOnDirectoryChange(t *testing.T) {
 	}
 }
 
+func TestShellHookFish(t *testing.T) {
+	hook, err := ShellHook("fish")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(hook, "function coltty_chpwd") {
+		t.Error("fish hook should contain function coltty_chpwd")
+	}
+	if !strings.Contains(hook, "--on-variable PWD") {
+		t.Error("fish hook should use --on-variable PWD")
+	}
+	if !strings.Contains(hook, "coltty apply --quiet") {
+		t.Error("fish hook should call coltty apply --quiet")
+	}
+	if !strings.Contains(hook, "functions --query coltty_chpwd") {
+		t.Error("fish hook should guard against duplicate registration with functions --query")
+	}
+}
+
 func TestShellHookUnsupported(t *testing.T) {
-	_, err := ShellHook("fish")
+	_, err := ShellHook("tcsh")
 	if err == nil {
 		t.Error("expected error for unsupported shell")
 	}
