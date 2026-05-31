@@ -24,7 +24,10 @@ chpwd_functions+=(coltty_chpwd)
 
 func bashHook() string {
 	return `__coltty_prompt_command() {
-    coltty apply --quiet 2>/dev/null
+    if [[ "${__coltty_last_pwd:-}" != "$PWD" ]]; then
+        __coltty_last_pwd="$PWD"
+        coltty apply --quiet 2>/dev/null
+    fi
 }
 if [[ ! "$PROMPT_COMMAND" =~ __coltty_prompt_command ]]; then
     PROMPT_COMMAND="__coltty_prompt_command;${PROMPT_COMMAND}"

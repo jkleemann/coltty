@@ -42,6 +42,40 @@ func TestShellHookBash(t *testing.T) {
 	}
 }
 
+func TestBashHookOnlyRunsOnDirectoryChange(t *testing.T) {
+	hook, err := ShellHook("bash")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(hook, "${__coltty_last_pwd:-}") {
+		t.Error("bash hook should use ${__coltty_last_pwd:-} for set -u compatibility")
+	}
+	if !strings.Contains(hook, "$PWD") {
+		t.Error("bash hook should reference $PWD")
+	}
+	if !strings.Contains(hook, "__coltty_last_pwd=") {
+		t.Error("bash hook should assign __coltty_last_pwd")
+	}
+	// The hook should only call coltty apply inside a conditional, not unconditionally
+	lines := strings.Split(hook, "\n")
+	applyLine := -1
+	for i, line := range lines {
+		if strings.Contains(line, "coltty apply --quiet") {
+			applyLine = i
+			break
+		}
+	}
+	if applyLine == -1 {
+		t.Fatal("bash hook should contain coltty apply --quiet")
+	}
+	// Check that the apply line is indented (inside a block) rather than at top level
+	applyLineTrimmed := strings.TrimLeft(lines[applyLine], " \t")
+	if applyLineTrimmed == lines[applyLine] {
+		t.Error("bash hook should call coltty apply --quiet inside a conditional block, not at top level")
+	}
+}
+
 func TestShellHookUnsupported(t *testing.T) {
 	_, err := ShellHook("fish")
 	if err == nil {
