@@ -2,6 +2,36 @@ package adapter
 
 import "testing"
 
+func TestValidateHex(t *testing.T) {
+	tests := []struct {
+		name    string
+		color   string
+		wantErr bool
+	}{
+		{"valid with hash", "#c0caf5", false},
+		{"valid uppercase", "#C0CAF5", false},
+		{"valid mixed case", "#C0caF5", false},
+		{"valid no hash", "c0caf5", false},
+		{"too short", "#c0ca", true},
+		{"too long", "#c0caf5ff", true},
+		{"invalid chars", "#gggggg", true},
+		{"empty", "", true},
+		{"just hash", "#", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateHex(tt.color)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateHex(%q) expected error, got nil", tt.color)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateHex(%q) unexpected error: %v", tt.color, err)
+			}
+		})
+	}
+}
+
 func TestHexToTerminalAppRGB(t *testing.T) {
 	tests := []struct {
 		name    string

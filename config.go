@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"github.com/BurntSushi/toml"
+	"github.com/jkleemann/coltty/adapter"
 )
 
 // Scheme defines a color scheme with foreground, background, cursor, and palette colors.
@@ -59,15 +59,13 @@ type ResolvedScheme struct {
 	TerminalAppProfile  string
 }
 
-var hexColorRegex = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
-
 // Validate checks that all non-empty color fields in the resolved scheme are valid
 // 6-digit hex colors. Returns a descriptive error listing invalid fields.
 func (r *ResolvedScheme) Validate() error {
 	var invalid []string
 
 	check := func(name, value string) {
-		if value != "" && !hexColorRegex.MatchString(value) {
+		if value != "" && adapter.ValidateHex(value) != nil {
 			invalid = append(invalid, name)
 		}
 	}
@@ -81,7 +79,7 @@ func (r *ResolvedScheme) Validate() error {
 	check("Tab", r.Tab)
 
 	for i, c := range r.Palette {
-		if c != "" && !hexColorRegex.MatchString(c) {
+		if c != "" && adapter.ValidateHex(c) != nil {
 			invalid = append(invalid, fmt.Sprintf("Palette[%d]", i))
 		}
 	}
