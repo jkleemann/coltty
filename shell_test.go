@@ -96,6 +96,34 @@ func TestShellHookFish(t *testing.T) {
 	}
 }
 
+func TestZshHookDuplicateGuard(t *testing.T) {
+	hook, err := ShellHook("zsh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The hook should check if coltty_chpwd is already in chpwd_functions
+	// before appending, to avoid duplicate registration on repeated sourcing.
+	if !strings.Contains(hook, "chpwd_functions[(I)coltty_chpwd]") {
+		t.Error("zsh hook should guard against duplicate registration with chpwd_functions[(I)coltty_chpwd]")
+	}
+}
+
+func TestBashHookAnchoredRegex(t *testing.T) {
+	hook, err := ShellHook("bash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The hook should use an exact-match check for __coltty_prompt_command,
+	// not an unanchored regex that could match my__coltty_prompt_command.
+	if strings.Contains(hook, "=~ __coltty_prompt_command") {
+		t.Error("bash hook should not use unanchored =~ regex for duplicate check")
+	}
+	// Should use a case statement or similarly robust check
+	if !strings.Contains(hook, "case") {
+		t.Error("bash hook should use case statement for exact matching")
+	}
+}
+
 func TestShellHookUnsupported(t *testing.T) {
 	_, err := ShellHook("tcsh")
 	if err == nil {

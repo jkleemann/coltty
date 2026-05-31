@@ -20,7 +20,9 @@ func zshHook() string {
 	return `coltty_chpwd() {
     coltty apply --quiet 2>/dev/null
 }
-chpwd_functions+=(coltty_chpwd)
+if (( ! ${chpwd_functions[(I)coltty_chpwd]} )); then
+    chpwd_functions+=(coltty_chpwd)
+fi
 `
 }
 
@@ -31,9 +33,10 @@ func bashHook() string {
         coltty apply --quiet 2>/dev/null
     fi
 }
-if [[ ! "$PROMPT_COMMAND" =~ __coltty_prompt_command ]]; then
-    PROMPT_COMMAND="__coltty_prompt_command;${PROMPT_COMMAND}"
-fi
+case ";${PROMPT_COMMAND};" in
+    *";__coltty_prompt_command;"*) ;;
+    *) PROMPT_COMMAND="__coltty_prompt_command;${PROMPT_COMMAND}" ;;
+esac
 `
 }
 
