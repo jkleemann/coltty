@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -231,5 +233,78 @@ func TestImportCommandAutoDetect(t *testing.T) {
 	// unknown
 	if f := detectFormat("theme.txt"); f != "" {
 		t.Errorf("expected empty for .txt, got %q", f)
+	}
+}
+
+func TestAppendToGlobalConfigAtomic(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "config.toml")
+
+	globalConfigPathOverride = configPath
+	defer func() { globalConfigPathOverride = "" }()
+
+	// Seed an initial config with one scheme.
+	initial := `[schemes.seed]
+foreground = "#111111"
+background = "#222222"
+cursor = "#333333"
+palette = [
+    "#000000", "#111111", "#222222", "#333333",
+    "#444444", "#555555", "#666666", "#777777",
+    "#888888", "#999999", "#aaaaaa", "#bbbbbb",
+    "#cccccc", "#dddddd", "#eeeeee", "#ffffff",
+]
+`
+	if err := os.WriteFile(configPath, []byte(initial), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Concurrently append many unique schemes.
+	const num = 20
+	var wg sync.WaitGroup
+	for i := 0; i < num; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			name := fmt.Sprintf("scheme-%02d", idx)
+			scheme := Scheme{
+				Foreground: "#c0caf5",
+				Background: "#1a1b26",
+				Cursor:     "#c0caf5",
+				Palette: []string{
+					"#15161e", "#f7768e", "#9ece6a", "#e0af68",
+					"#7aa2f7", "#bb9af7", "#7dcfff", "#a9b1d6",
+					"#414868", "#f7768e", "#9ece6a", "#e0af68",
+					"#7aa2f7", "#bb9af7", "#7dcfff", "#c0caf5",
+				},
+			}
+			if err := appendToGlobalConfig(name, scheme); err != nil {
+				t.Errorf("appendToGlobalConfig failed: %v", err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	// Load the final config and verify all schemes are present.
+	cfg, err := LoadGlobalConfigFrom(configPath)
+	if err != nil {
+		t.Fatalf("failed to load final config: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("expected non-nil config")
+	}
+
+	if len(cfg.Schemes) != num+1 {
+		t.Errorf("expected %d schemes (1 seed + %d appended), got %d", num+1, num, len(cfg.Schemes))
+	}
+
+	for i := 0; i < num; i++ {
+		name := fmt.Sprintf("scheme-%02d", i)
+		if _, ok := cfg.Schemes[name]; !ok {
+			t.Errorf("missing scheme %q in final config", name)
+		}
+	}
+	if _, ok := cfg.Schemes["seed"]; !ok {
+		t.Error("missing seed scheme in final config")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
@@ -14,6 +15,10 @@ var importFormat string
 var importName string
 var importAppend bool
 var importListFormats bool
+
+// appendToGlobalConfigMu serializes concurrent writes to the global config
+// so that read-modify-write cycles do not lose data.
+var appendToGlobalConfigMu sync.Mutex
 
 var importCmd = &cobra.Command{
 	Use:   "import <file>",
@@ -147,7 +152,11 @@ func formatSchemeToml(name string, s Scheme) string {
 }
 
 // appendToGlobalConfig reads the existing global config, adds the scheme, and writes it back.
+// The write is atomic: it writes to a temp file in the same directory and renames it into place.
 func appendToGlobalConfig(name string, scheme Scheme) error {
+	appendToGlobalConfigMu.Lock()
+	defer appendToGlobalConfigMu.Unlock()
+
 	configPath := globalConfigPath()
 
 	cfg, err := LoadGlobalConfig()
@@ -171,14 +180,27 @@ func appendToGlobalConfig(name string, scheme Scheme) error {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
-	f, err := os.Create(configPath)
+	// Write to a temp file in the same directory, then rename atomically.
+	tempFile, err := os.CreateTemp(filepath.Dir(configPath), "*.toml")
 	if err != nil {
-		return fmt.Errorf("writing global config: %w", err)
+		return fmt.Errorf("creating temp file: %w", err)
 	}
-	defer f.Close()
+	tempPath := tempFile.Name()
 
-	if err := toml.NewEncoder(f).Encode(cfg); err != nil {
+	if err := toml.NewEncoder(tempFile).Encode(cfg); err != nil {
+		tempFile.Close()
+		os.Remove(tempPath)
 		return fmt.Errorf("encoding global config: %w", err)
+	}
+
+	if err := tempFile.Close(); err != nil {
+		os.Remove(tempPath)
+		return fmt.Errorf("closing temp file: %w", err)
+	}
+
+	if err := os.Rename(tempPath, configPath); err != nil {
+		os.Remove(tempPath)
+		return fmt.Errorf("renaming temp file: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "coltty: imported scheme %q to %s\n", name, configPath)
