@@ -450,6 +450,89 @@ func TestLoadDirConfigUnmarshalError(t *testing.T) {
 	}
 }
 
+func TestHasOverridesAllEmpty(t *testing.T) {
+	overrides := Scheme{}
+	if hasOverrides(overrides) {
+		t.Error("expected hasOverrides to be false for empty scheme")
+	}
+}
+
+func TestHasOverridesSomeFieldsSet(t *testing.T) {
+	cases := []struct {
+		name      string
+		overrides Scheme
+	}{
+		{"foreground", Scheme{Foreground: "#fff"}},
+		{"background", Scheme{Background: "#000"}},
+		{"cursor", Scheme{Cursor: "#ccc"}},
+		{"palette", Scheme{Palette: []string{"#111"}}},
+		{"bold", Scheme{Bold: "#bbb"}},
+		{"selection_foreground", Scheme{SelectionForeground: "#eee"}},
+		{"selection_background", Scheme{SelectionBackground: "#ddd"}},
+		{"tab", Scheme{Tab: "#aaa"}},
+		{"iterm_preset", Scheme{ItermPreset: "preset"}},
+		{"terminal_app_profile", Scheme{TerminalAppProfile: "profile"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !hasOverrides(tc.overrides) {
+				t.Errorf("expected hasOverrides to be true for %s", tc.name)
+			}
+		})
+	}
+}
+
+func TestGetDefaultSchemeNilConfig(t *testing.T) {
+	scheme, isBuiltin := getDefaultScheme(nil)
+	if scheme.Foreground != hardcodedDefault.Foreground {
+		t.Errorf("expected hardcoded default foreground, got %q", scheme.Foreground)
+	}
+	if !isBuiltin {
+		t.Error("expected isBuiltin to be true for nil config")
+	}
+}
+
+func TestGetDefaultSchemeKnownUserScheme(t *testing.T) {
+	globalCfg := &GlobalConfig{
+		Schemes: map[string]Scheme{
+			"custom": {Foreground: "#111", Background: "#222", Cursor: "#333"},
+		},
+	}
+	globalCfg.Default.Scheme = "custom"
+	scheme, isBuiltin := getDefaultScheme(globalCfg)
+	if scheme.Foreground != "#111" {
+		t.Errorf("expected user scheme foreground '#111', got %q", scheme.Foreground)
+	}
+	if isBuiltin {
+		t.Error("expected isBuiltin to be false for user-defined scheme")
+	}
+}
+
+func TestGetDefaultSchemeKnownBuiltinScheme(t *testing.T) {
+	globalCfg := &GlobalConfig{}
+	globalCfg.Default.Scheme = "nord"
+	scheme, isBuiltin := getDefaultScheme(globalCfg)
+	if scheme.Foreground != "#d8dee9" {
+		t.Errorf("expected nord foreground '#d8dee9', got %q", scheme.Foreground)
+	}
+	if !isBuiltin {
+		t.Error("expected isBuiltin to be true for built-in scheme")
+	}
+}
+
+func TestGetDefaultSchemeUnknownScheme(t *testing.T) {
+	globalCfg := &GlobalConfig{}
+	globalCfg.Default.Scheme = "nonexistent"
+	scheme, isBuiltin := getDefaultScheme(globalCfg)
+	if scheme.Foreground != hardcodedDefault.Foreground {
+		t.Errorf("expected hardcoded default when scheme unknown, got %q", scheme.Foreground)
+	}
+	if !isBuiltin {
+		t.Error("expected isBuiltin to be true when falling back to hardcoded default")
+	}
+}
+
 func TestGetDefaultSchemeEmptyDefault(t *testing.T) {
 	globalCfg := &GlobalConfig{
 		Schemes: map[string]Scheme{
@@ -544,5 +627,113 @@ func TestApplyOverridesNoOverrides(t *testing.T) {
 	}
 	if len(result.Palette) != 1 || result.Palette[0] != "#000" {
 		t.Errorf("expected palette unchanged, got %v", result.Palette)
+	}
+}
+
+func TestApplyOverridesPartial(t *testing.T) {
+	base := Scheme{
+		Foreground:          "#111",
+		Background:          "#222",
+		Cursor:              "#333",
+		Palette:             []string{"#000", "#001"},
+		Bold:                "#444",
+		SelectionForeground: "#555",
+		SelectionBackground: "#666",
+		Tab:                 "#777",
+		ItermPreset:         "old",
+		TerminalAppProfile:  "old-profile",
+	}
+	overrides := Scheme{
+		Background:         "#bbb",
+		Palette:            []string{"#fff"},
+		ItermPreset:        "new",
+		TerminalAppProfile: "new-profile",
+	}
+	result := applyOverrides(base, overrides)
+	if result.Foreground != "#111" {
+		t.Errorf("expected foreground unchanged, got %q", result.Foreground)
+	}
+	if result.Background != "#bbb" {
+		t.Errorf("expected background '#bbb', got %q", result.Background)
+	}
+	if result.Cursor != "#333" {
+		t.Errorf("expected cursor unchanged, got %q", result.Cursor)
+	}
+	if len(result.Palette) != 1 || result.Palette[0] != "#fff" {
+		t.Errorf("expected palette ['#fff'], got %v", result.Palette)
+	}
+	if result.Bold != "#444" {
+		t.Errorf("expected bold unchanged, got %q", result.Bold)
+	}
+	if result.SelectionForeground != "#555" {
+		t.Errorf("expected selection_foreground unchanged, got %q", result.SelectionForeground)
+	}
+	if result.SelectionBackground != "#666" {
+		t.Errorf("expected selection_background unchanged, got %q", result.SelectionBackground)
+	}
+	if result.Tab != "#777" {
+		t.Errorf("expected tab unchanged, got %q", result.Tab)
+	}
+	if result.ItermPreset != "new" {
+		t.Errorf("expected iterm_preset 'new', got %q", result.ItermPreset)
+	}
+	if result.TerminalAppProfile != "new-profile" {
+		t.Errorf("expected terminal_app_profile 'new-profile', got %q", result.TerminalAppProfile)
+	}
+}
+
+func TestLookupSchemeInGlobalConfig(t *testing.T) {
+	globalCfg := &GlobalConfig{
+		Schemes: map[string]Scheme{
+			"custom": {Foreground: "#111", Background: "#222", Cursor: "#333"},
+		},
+	}
+	scheme, ok := lookupScheme("custom", globalCfg)
+	if !ok {
+		t.Fatal("expected lookupScheme to find scheme in global config")
+	}
+	if scheme.Foreground != "#111" {
+		t.Errorf("expected foreground '#111', got %q", scheme.Foreground)
+	}
+}
+
+func TestLookupSchemeInBuiltins(t *testing.T) {
+	scheme, ok := lookupScheme("gruvbox", nil)
+	if !ok {
+		t.Fatal("expected lookupScheme to find built-in scheme")
+	}
+	if scheme.Foreground != "#ebdbb2" {
+		t.Errorf("expected gruvbox foreground '#ebdbb2', got %q", scheme.Foreground)
+	}
+
+	// Also test that built-ins are found even when global config is present
+	globalCfg := &GlobalConfig{
+		Schemes: map[string]Scheme{
+			"custom": {Foreground: "#111", Background: "#222", Cursor: "#333"},
+		},
+	}
+	scheme, ok = lookupScheme("nord", globalCfg)
+	if !ok {
+		t.Fatal("expected lookupScheme to find built-in scheme when global config present")
+	}
+	if scheme.Foreground != "#d8dee9" {
+		t.Errorf("expected nord foreground '#d8dee9', got %q", scheme.Foreground)
+	}
+}
+
+func TestLookupSchemeNotFoundConfig(t *testing.T) {
+	_, ok := lookupScheme("nonexistent", nil)
+	if ok {
+		t.Error("expected lookupScheme to return false for unknown scheme")
+	}
+
+	globalCfg := &GlobalConfig{
+		Schemes: map[string]Scheme{
+			"custom": {Foreground: "#111", Background: "#222", Cursor: "#333"},
+		},
+	}
+	_, ok = lookupScheme("also-nonexistent", globalCfg)
+	if ok {
+		t.Error("expected lookupScheme to return false for unknown scheme even with global config")
 	}
 }
