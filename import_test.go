@@ -473,3 +473,62 @@ func TestDeriveSchemeNameCollision(t *testing.T) {
 		t.Errorf("expected 'solarizeddark-3', got %q", name3)
 	}
 }
+
+func TestDeriveSchemeNameEmpty(t *testing.T) {
+	used := make(map[string]bool)
+	name := deriveSchemeName("!!!.json", used)
+	if name != "imported" {
+		t.Errorf("expected 'imported', got %q", name)
+	}
+}
+
+func TestAppendToGlobalConfigMkdirAllError(t *testing.T) {
+	globalConfigPathOverride = "/dev/null/coltty/config.toml"
+	defer func() { globalConfigPathOverride = "" }()
+
+	scheme := Scheme{Foreground: "#ffffff", Background: "#000000", Cursor: "#ff0000"}
+	err := appendToGlobalConfig("test", scheme)
+	if err == nil {
+		t.Fatal("expected error from MkdirAll on non-directory path")
+	}
+}
+
+func TestAppendToGlobalConfigTempFileError(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "config.toml")
+
+	// Make the directory read-only so CreateTemp fails.
+	if err := os.Chmod(configDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		os.Chmod(configDir, 0755)
+	}()
+
+	globalConfigPathOverride = configPath
+	defer func() { globalConfigPathOverride = "" }()
+
+	scheme := Scheme{Foreground: "#ffffff", Background: "#000000", Cursor: "#ff0000"}
+	err := appendToGlobalConfig("test", scheme)
+	if err == nil {
+		t.Fatal("expected error from CreateTemp in read-only directory")
+	}
+}
+
+func TestAppendToGlobalConfigRenameError(t *testing.T) {
+	configDir := t.TempDir()
+	// Create the target path as a directory so Rename fails.
+	configPath := filepath.Join(configDir, "config.toml")
+	if err := os.Mkdir(configPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	globalConfigPathOverride = configPath
+	defer func() { globalConfigPathOverride = "" }()
+
+	scheme := Scheme{Foreground: "#ffffff", Background: "#000000", Cursor: "#ff0000"}
+	err := appendToGlobalConfig("test", scheme)
+	if err == nil {
+		t.Fatal("expected error from Rename when target is a directory")
+	}
+}

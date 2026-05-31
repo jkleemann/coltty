@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -156,5 +157,33 @@ cursor = "#ff0000"
 
 	if !strings.Contains(stderr, "custom-dark") {
 		t.Errorf("expected custom-dark in stderr output, got: %s", stderr)
+	}
+}
+
+func TestSetupTerminalAppScriptError(t *testing.T) {
+	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
+	defer func() { globalConfigPathOverride = "" }()
+
+	setupRunAppleScript = func(script string) error {
+		return errors.New("applescript failed")
+	}
+	defer func() { setupRunAppleScript = nil }()
+
+	_, stderr, err := executeCommand(newTestRootCmd(), "setup", "terminal-app")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Every scheme should have an error mark.
+	builtins := BuiltinSchemes()
+	for name := range builtins {
+		if !strings.Contains(stderr, "\u2717 "+name) {
+			t.Errorf("expected error mark for scheme %q in stderr", name)
+		}
+	}
+
+	// Summary should report 0 created.
+	if !strings.Contains(stderr, "created/updated 0 Terminal.app profiles") {
+		t.Errorf("expected 0 profiles created, got stderr: %s", stderr)
 	}
 }
