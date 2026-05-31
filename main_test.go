@@ -6,9 +6,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
-func executeCommand(args ...string) (string, string, error) {
+func newTestRootCmd() *cobra.Command {
+	return newRootCmd()
+}
+
+func executeCommand(cmd *cobra.Command, args ...string) (string, string, error) {
 	// Capture stdout and stderr
 	oldStdout := os.Stdout
 	oldStderr := os.Stderr
@@ -18,8 +24,8 @@ func executeCommand(args ...string) (string, string, error) {
 	os.Stdout = wOut
 	os.Stderr = wErr
 
-	rootCmd.SetArgs(args)
-	err := rootCmd.Execute()
+	cmd.SetArgs(args)
+	err := cmd.Execute()
 
 	wOut.Close()
 	wErr.Close()
@@ -34,7 +40,7 @@ func executeCommand(args ...string) (string, string, error) {
 }
 
 func TestInitZsh(t *testing.T) {
-	stdout, _, err := executeCommand("init", "zsh")
+	stdout, _, err := executeCommand(newTestRootCmd(), "init", "zsh")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +50,7 @@ func TestInitZsh(t *testing.T) {
 }
 
 func TestInitBash(t *testing.T) {
-	stdout, _, err := executeCommand("init", "bash")
+	stdout, _, err := executeCommand(newTestRootCmd(), "init", "bash")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +67,7 @@ func TestApplyDryRun(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(oldDir)
 
-	stdout, _, err := executeCommand("apply", "--dry-run")
+	stdout, _, err := executeCommand(newTestRootCmd(), "apply", "--dry-run")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +83,7 @@ func TestShowCommand(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(oldDir)
 
-	stdout, _, err := executeCommand("show")
+	stdout, _, err := executeCommand(newTestRootCmd(), "show")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +99,7 @@ func TestSchemesCommandNoConfig(t *testing.T) {
 	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
 	defer func() { globalConfigPathOverride = "" }()
 
-	stdout, _, err := executeCommand("schemes")
+	stdout, _, err := executeCommand(newTestRootCmd(), "schemes")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +121,7 @@ func TestSetCommandCreatesConfig(t *testing.T) {
 	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
 	defer func() { globalConfigPathOverride = "" }()
 
-	_, stderr, err := executeCommand("set", "dracula")
+	_, stderr, err := executeCommand(newTestRootCmd(), "set", "dracula")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,9 +147,8 @@ func TestSetCommandInline(t *testing.T) {
 
 	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
 	defer func() { globalConfigPathOverride = "" }()
-	defer func() { setInline = false }()
 
-	_, _, err := executeCommand("set", "dracula", "--inline")
+	_, _, err := executeCommand(newTestRootCmd(), "set", "dracula", "--inline")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +184,7 @@ func TestSetCommandRejectsUnknown(t *testing.T) {
 	globalConfigPathOverride = filepath.Join(t.TempDir(), "nonexistent", "config.toml")
 	defer func() { globalConfigPathOverride = "" }()
 
-	_, _, err := executeCommand("set", "nonexistent-scheme")
+	_, _, err := executeCommand(newTestRootCmd(), "set", "nonexistent-scheme")
 	if err == nil {
 		t.Fatal("expected error for unknown scheme")
 	}
@@ -202,7 +207,7 @@ func TestSetCommandOverwritesExisting(t *testing.T) {
 	// Create an existing file.
 	os.WriteFile(filepath.Join(dir, ".coltty.toml"), []byte(`scheme = "nord"`), 0644)
 
-	_, stderr, err := executeCommand("set", "dracula")
+	_, stderr, err := executeCommand(newTestRootCmd(), "set", "dracula")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +245,7 @@ cursor = "#user"
 	globalConfigPathOverride = configPath
 	defer func() { globalConfigPathOverride = "" }()
 
-	stdout, _, err := executeCommand("schemes")
+	stdout, _, err := executeCommand(newTestRootCmd(), "schemes")
 	if err != nil {
 		t.Fatal(err)
 	}

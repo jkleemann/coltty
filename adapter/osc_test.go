@@ -16,7 +16,9 @@ func TestOSCEmitterFullScheme(t *testing.T) {
 		Palette:    []string{"#15161e", "#f7768e"},
 	}
 
-	e.Emit(scheme)
+	if err := e.Emit(scheme); err != nil {
+		t.Fatal(err)
+	}
 
 	got := buf.String()
 	expected := "\033]10;#c0caf5\033\\" +
@@ -38,7 +40,9 @@ func TestOSCEmitterPartialScheme(t *testing.T) {
 		Background: "#1a1b26",
 	}
 
-	e.Emit(scheme)
+	if err := e.Emit(scheme); err != nil {
+		t.Fatal(err)
+	}
 
 	got := buf.String()
 	expected := "\033]11;#1a1b26\033\\"
@@ -52,7 +56,9 @@ func TestOSCEmitterEmptyScheme(t *testing.T) {
 	var buf bytes.Buffer
 	e := OSCEmitter{Writer: &buf}
 
-	e.Emit(&ResolvedScheme{})
+	if err := e.Emit(&ResolvedScheme{}); err != nil {
+		t.Fatal(err)
+	}
 
 	if buf.Len() != 0 {
 		t.Errorf("expected no output for empty scheme, got %q", buf.String())

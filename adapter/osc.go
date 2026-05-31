@@ -14,7 +14,8 @@ type OSCEmitter struct {
 }
 
 // Emit writes OSC 10/11/12/4 escape sequences for the given scheme.
-func (e *OSCEmitter) Emit(scheme *ResolvedScheme) {
+// Returns an error if the underlying write fails.
+func (e *OSCEmitter) Emit(scheme *ResolvedScheme) error {
 	w := e.Writer
 	if w == nil {
 		w = os.Stdout
@@ -35,19 +36,20 @@ func (e *OSCEmitter) Emit(scheme *ResolvedScheme) {
 		fmt.Fprintf(&b, "\033]4;%d;%s\033\\", i, color)
 	}
 
-	writeOSC(w, b.String())
+	return writeOSC(w, b.String())
 }
 
 // writeOSC writes OSC output to the writer, wrapping in tmux DCS passthrough
-// if running inside tmux.
-func writeOSC(w io.Writer, output string) {
+// if running inside tmux. Returns an error if the write fails.
+func writeOSC(w io.Writer, output string) error {
 	if output == "" {
-		return
+		return nil
 	}
 	if InTmux() {
 		output = WrapTmuxPassthrough(output)
 	}
-	fmt.Fprint(w, output)
+	_, err := fmt.Fprint(w, output)
+	return err
 }
 
 // OSCAdapter is a generic adapter for terminals that support standard OSC

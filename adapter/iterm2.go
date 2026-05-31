@@ -27,7 +27,9 @@ func (a *ITermAdapter) Detect() bool {
 
 func (a *ITermAdapter) Apply(scheme *ResolvedScheme) error {
 	// Emit standard OSC 10/11/12/4 sequences
-	a.Emitter.Emit(scheme)
+	if err := a.Emitter.Emit(scheme); err != nil {
+		return err
+	}
 
 	// Emit iTerm2 proprietary extensions
 	a.emitITermExtras(scheme)

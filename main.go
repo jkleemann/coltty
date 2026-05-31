@@ -298,8 +298,251 @@ func init() {
 	rootCmd.AddCommand(setCmd)
 }
 
+// newRootCmd builds a fresh command tree with isolated flag variables.
+// Use this in tests to avoid mutating global state.
+func newRootCmd() *cobra.Command {
+	var applyQuiet bool
+	var applyDryRun bool
+	var setInline bool
+
+	rootCmd := &cobra.Command{
+		Use:   "coltty",
+		Short: "Automatically switch terminal color schemes based on directory",
+		Long:  "Coltty is a CLI tool and shell hook that automatically switches terminal color schemes based on the current directory.",
+	}
+
+	initCmd := &cobra.Command{
+		Use:   "init <shell>",
+		Short: "Print shell hook code for the given shell",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			hook, err := ShellHook(args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Print(hook)
+			return nil
+		},
+	}
+
+	applyCmd := &cobra.Command{
+		Use:   "apply",
+		Short: "Apply the color scheme for the current directory",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			globalCfg, err := LoadGlobalConfig()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "coltty: warning: failed to load global config: %v\n", err)
+			}
+
+			cwd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("getting current directory: %w", err)
+			}
+
+			resolved, err := Resolve(cwd, globalCfg)
+			if err != nil {
+				return err
+			}
+
+			if err := resolved.Validate(); err != nil {
+				fmt.Fprintf(os.Stderr, "coltty: warning: %v\n", err)
+			}
+
+			if applyDryRun {
+				printScheme(resolved)
+				return nil
+			}
+
+			adapterScheme := toAdapterScheme(resolved)
+
+			if adapter.InScreen() && !applyQuiet {
+				fmt.Fprintln(os.Stderr, "coltty: warning: GNU Screen does not support dynamic color changes")
+			}
+
+			a := adapter.DetectAdapter(adapter.AllAdapters())
+			if a == nil {
+				if !applyQuiet {
+					fmt.Fprintln(os.Stderr, "coltty: no supported terminal detected")
+				}
+				return nil
+			}
+
+			if err := a.Apply(adapterScheme); err != nil {
+				if !applyQuiet {
+					fmt.Fprintf(os.Stderr, "coltty: warning: %s adapter: %v\n", a.Name(), err)
+				}
+				return nil
+			}
+
+			if !applyQuiet {
+				fmt.Fprintf(os.Stderr, "coltty: applied scheme via %s (source: %s)\n", a.Name(), resolved.Source)
+			}
+
+			return nil
+		},
+	}
+
+	showCmd := &cobra.Command{
+		Use:   "show",
+		Short: "Show the resolved color scheme for the current directory",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			globalCfg, err := LoadGlobalConfig()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "coltty: warning: failed to load global config: %v\n", err)
+			}
+
+			cwd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("getting current directory: %w", err)
+			}
+
+			resolved, err := Resolve(cwd, globalCfg)
+			if err != nil {
+				return err
+			}
+
+			printScheme(resolved)
+			return nil
+		},
+	}
+
+	schemesCmd := &cobra.Command{
+		Use:   "schemes",
+		Short: "List all available schemes (built-in and user-defined)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			globalCfg, err := LoadGlobalConfig()
+			if err != nil {
+				return fmt.Errorf("loading global config: %w", err)
+			}
+
+			var defaultScheme string
+			if globalCfg != nil {
+				defaultScheme = globalCfg.Default.Scheme
+			}
+
+			type schemeEntry struct {
+				scheme Scheme
+				tag    string
+			}
+			entries := make(map[string]schemeEntry)
+
+			for name, s := range BuiltinSchemes() {
+				entries[name] = schemeEntry{scheme: s, tag: " (built-in)"}
+			}
+
+			if globalCfg != nil {
+				for name, s := range globalCfg.Schemes {
+					tag := ""
+					if _, isBuiltin := entries[name]; isBuiltin {
+						tag = " (override)"
+					}
+					entries[name] = schemeEntry{scheme: s, tag: tag}
+				}
+			}
+
+			if len(entries) == 0 {
+				fmt.Println("No schemes available.")
+				return nil
+			}
+
+			names := make([]string, 0, len(entries))
+			for name := range entries {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+
+			for _, name := range names {
+				e := entries[name]
+				marker := e.tag
+				if name == defaultScheme {
+					marker += " (default)"
+				}
+				fmt.Printf("%s%s\n  fg: %s  bg: %s  cursor: %s\n", name, marker, e.scheme.Foreground, e.scheme.Background, e.scheme.Cursor)
+			}
+
+			return nil
+		},
+	}
+
+	setCmd := &cobra.Command{
+		Use:   "set <scheme>",
+		Short: "Set the color scheme for the current directory",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			schemeName := args[0]
+
+			globalCfg, err := LoadGlobalConfig()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "coltty: warning: failed to load global config: %v\n", err)
+			}
+
+			scheme, ok := lookupScheme(schemeName, globalCfg)
+			if !ok {
+				return fmt.Errorf("unknown scheme %q (use 'coltty schemes' to list available schemes)", schemeName)
+			}
+
+			configPath := filepath.Join(".", dirConfigFile)
+
+			if _, err := os.Stat(configPath); err == nil {
+				fmt.Fprintf(os.Stderr, "coltty: overwriting existing %s\n", dirConfigFile)
+			}
+
+			var content string
+			if setInline {
+				content = formatInlineConfig(schemeName, scheme)
+			} else {
+				content = fmt.Sprintf("scheme = %q\n", schemeName)
+			}
+
+			if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+				return fmt.Errorf("writing %s: %w", dirConfigFile, err)
+			}
+
+			resolved := &ResolvedScheme{
+				Foreground:          scheme.Foreground,
+				Background:          scheme.Background,
+				Cursor:              scheme.Cursor,
+				Palette:             scheme.Palette,
+				Source:              configPath,
+				SchemeName:          schemeName,
+				Bold:                scheme.Bold,
+				SelectionForeground: scheme.SelectionForeground,
+				SelectionBackground: scheme.SelectionBackground,
+				Tab:                 scheme.Tab,
+				ItermPreset:         scheme.ItermPreset,
+				TerminalAppProfile:  scheme.TerminalAppProfile,
+			}
+			adapterScheme := toAdapterScheme(resolved)
+
+			a := adapter.DetectAdapter(adapter.AllAdapters())
+			if a != nil {
+				if err := a.Apply(adapterScheme); err != nil {
+					fmt.Fprintf(os.Stderr, "coltty: warning: %s adapter: %v\n", a.Name(), err)
+				}
+			}
+
+			fmt.Fprintf(os.Stderr, "coltty: set scheme %q in %s\n", schemeName, dirConfigFile)
+			return nil
+		},
+	}
+
+	applyCmd.Flags().BoolVar(&applyQuiet, "quiet", false, "suppress output unless there's an error")
+	applyCmd.Flags().BoolVar(&applyDryRun, "dry-run", false, "print the resolved scheme without applying")
+	setCmd.Flags().BoolVar(&setInline, "inline", false, "write full color values instead of a scheme reference")
+
+	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(applyCmd)
+	rootCmd.AddCommand(showCmd)
+	rootCmd.AddCommand(schemesCmd)
+	rootCmd.AddCommand(setCmd)
+	rootCmd.AddCommand(newImportCmd())
+	rootCmd.AddCommand(newSetupCmd())
+
+	return rootCmd
+}
+
 func main() {
-	if err := rootCmd.Execute(); err != nil {
+	if err := newRootCmd().Execute(); err != nil {
 		os.Exit(1)
 	}
 }

@@ -108,7 +108,7 @@ func TestImportITerm2(t *testing.T) {
 }
 
 func TestImportCommandGoghStdout(t *testing.T) {
-	stdout, _, err := executeCommand("import", "testdata/dracula.json")
+	stdout, _, err := executeCommand(newTestRootCmd(), "import", "testdata/dracula.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,9 +124,7 @@ func TestImportCommandGoghStdout(t *testing.T) {
 }
 
 func TestImportCommandWithName(t *testing.T) {
-	defer func() { importName = "" }()
-
-	stdout, _, err := executeCommand("import", "testdata/dracula.json", "--name", "my-theme")
+	stdout, _, err := executeCommand(newTestRootCmd(), "import", "testdata/dracula.json", "--name", "my-theme")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +134,7 @@ func TestImportCommandWithName(t *testing.T) {
 }
 
 func TestImportCommandBase16(t *testing.T) {
-	stdout, _, err := executeCommand("import", "testdata/monokai.yaml")
+	stdout, _, err := executeCommand(newTestRootCmd(), "import", "testdata/monokai.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +147,7 @@ func TestImportCommandBase16(t *testing.T) {
 }
 
 func TestImportCommandITerm2(t *testing.T) {
-	stdout, _, err := executeCommand("import", "testdata/solarized.itermcolors")
+	stdout, _, err := executeCommand(newTestRootCmd(), "import", "testdata/solarized.itermcolors")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,9 +166,7 @@ func TestImportCommandAppend(t *testing.T) {
 	globalConfigPathOverride = configPath
 	defer func() { globalConfigPathOverride = "" }()
 
-	defer func() { importAppend = false }()
-
-	_, stderr, err := executeCommand("import", "testdata/dracula.json", "--append")
+	_, stderr, err := executeCommand(newTestRootCmd(), "import", "testdata/dracula.json", "--append")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,9 +185,7 @@ func TestImportCommandAppend(t *testing.T) {
 }
 
 func TestImportCommandListFormats(t *testing.T) {
-	defer func() { importListFormats = false }()
-
-	stdout, _, err := executeCommand("import", "--list-formats")
+	stdout, _, err := executeCommand(newTestRootCmd(), "import", "--list-formats")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,9 +201,7 @@ func TestImportCommandListFormats(t *testing.T) {
 }
 
 func TestImportCommandUnknownFormat(t *testing.T) {
-	defer func() { importFormat = "" }()
-
-	_, _, err := executeCommand("import", "testdata/dracula.json", "--format", "badformat")
+	_, _, err := executeCommand(newTestRootCmd(), "import", "testdata/dracula.json", "--format", "badformat")
 	if err == nil {
 		t.Fatal("expected error for unknown format")
 	}

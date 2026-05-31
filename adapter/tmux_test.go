@@ -114,7 +114,9 @@ func TestOSCEmitterWithTmux(t *testing.T) {
 		Foreground: "#ffffff",
 	}
 
-	e.Emit(scheme)
+	if err := e.Emit(scheme); err != nil {
+		t.Fatal(err)
+	}
 
 	got := buf.String()
 	// Should be wrapped in DCS passthrough
@@ -133,7 +135,9 @@ func TestOSCEmitterWithoutTmux(t *testing.T) {
 		Foreground: "#ffffff",
 	}
 
-	e.Emit(scheme)
+	if err := e.Emit(scheme); err != nil {
+		t.Fatal(err)
+	}
 
 	got := buf.String()
 	// Should NOT be wrapped

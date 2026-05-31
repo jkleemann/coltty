@@ -19,7 +19,7 @@ func TestSetupTerminalAppCommand(t *testing.T) {
 	}
 	defer func() { setupRunAppleScript = nil }()
 
-	_, stderr, err := executeCommand("setup", "terminal-app")
+	_, stderr, err := executeCommand(newTestRootCmd(), "setup", "terminal-app")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ terminal_app_profile = "CustomProfile"
 	}
 	defer func() { setupRunAppleScript = nil }()
 
-	_, _, err := executeCommand("setup", "terminal-app")
+	_, _, err := executeCommand(newTestRootCmd(), "setup", "terminal-app")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ cursor = "#ff0000"
 	}
 	defer func() { setupRunAppleScript = nil }()
 
-	_, stderr, err := executeCommand("setup", "terminal-app")
+	_, stderr, err := executeCommand(newTestRootCmd(), "setup", "terminal-app")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -207,6 +207,80 @@ func appendToGlobalConfig(name string, scheme Scheme) error {
 	return nil
 }
 
+func newImportCmd() *cobra.Command {
+	var importFormat string
+	var importName string
+	var importAppend bool
+	var importListFormats bool
+
+	importCmd := &cobra.Command{
+		Use:   "import <file>",
+		Short: "Import a color scheme from Gogh, base16, or iTerm2 format",
+		Long: `Import a color scheme from an external theme file.
+
+Supported formats:
+  gogh      Gogh JSON theme files (.json)
+  base16    base16 YAML theme files (.yaml, .yml)
+  iterm2    iTerm2 color preset files (.itermcolors)
+
+Format is auto-detected from the file extension, or set explicitly with --format.
+Outputs TOML to stdout by default. Use --append to write directly to the global config.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if importListFormats {
+				fmt.Println("Supported import formats:")
+				fmt.Println("  gogh      Gogh JSON theme files (.json)")
+				fmt.Println("  base16    base16 YAML theme files (.yaml, .yml)")
+				fmt.Println("  iterm2    iTerm2 color preset files (.itermcolors)")
+				return nil
+			}
+
+			if len(args) == 0 {
+				return fmt.Errorf("requires a file argument (use --list-formats to see supported formats)")
+			}
+
+			path := args[0]
+			format := importFormat
+			if format == "" {
+				format = detectFormat(path)
+				if format == "" {
+					return fmt.Errorf("cannot detect format from file extension %q (use --format to specify)", filepath.Ext(path))
+				}
+			}
+
+			scheme, detectedName, err := importFile(path, format)
+			if err != nil {
+				return err
+			}
+
+			name := importName
+			if name == "" {
+				if detectedName != "" {
+					name = strings.ToLower(strings.ReplaceAll(detectedName, " ", "-"))
+				} else {
+					base := filepath.Base(path)
+					name = strings.TrimSuffix(base, filepath.Ext(base))
+					name = strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+				}
+			}
+
+			if importAppend {
+				return appendToGlobalConfig(name, scheme)
+			}
+
+			fmt.Print(formatSchemeToml(name, scheme))
+			return nil
+		},
+	}
+
+	importCmd.Flags().StringVar(&importFormat, "format", "", "theme format: gogh, base16, or iterm2 (auto-detected from extension)")
+	importCmd.Flags().StringVar(&importName, "name", "", "scheme name (default: derived from file or theme metadata)")
+	importCmd.Flags().BoolVar(&importAppend, "append", false, "write directly to global config instead of stdout")
+	importCmd.Flags().BoolVar(&importListFormats, "list-formats", false, "list supported import formats")
+
+	return importCmd
+}
+
 func init() {
 	importCmd.Flags().StringVar(&importFormat, "format", "", "theme format: gogh, base16, or iterm2 (auto-detected from extension)")
 	importCmd.Flags().StringVar(&importName, "name", "", "scheme name (default: derived from file or theme metadata)")

@@ -41,7 +41,9 @@ func (g *GhosttyAdapter) Apply(scheme *ResolvedScheme) error {
 	}
 
 	// Emit OSC sequences to update the active terminal immediately
-	g.Emitter.Emit(scheme)
+	if err := g.Emitter.Emit(scheme); err != nil {
+		return err
+	}
 
 	return nil
 }
