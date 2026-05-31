@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/BurntSushi/toml"
 )
@@ -55,6 +57,39 @@ type ResolvedScheme struct {
 	Tab                 string
 	ItermPreset         string
 	TerminalAppProfile  string
+}
+
+var hexColorRegex = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// Validate checks that all non-empty color fields in the resolved scheme are valid
+// 6-digit hex colors. Returns a descriptive error listing invalid fields.
+func (r *ResolvedScheme) Validate() error {
+	var invalid []string
+
+	check := func(name, value string) {
+		if value != "" && !hexColorRegex.MatchString(value) {
+			invalid = append(invalid, name)
+		}
+	}
+
+	check("Foreground", r.Foreground)
+	check("Background", r.Background)
+	check("Cursor", r.Cursor)
+	check("Bold", r.Bold)
+	check("SelectionForeground", r.SelectionForeground)
+	check("SelectionBackground", r.SelectionBackground)
+	check("Tab", r.Tab)
+
+	for i, c := range r.Palette {
+		if c != "" && !hexColorRegex.MatchString(c) {
+			invalid = append(invalid, fmt.Sprintf("Palette[%d]", i))
+		}
+	}
+
+	if len(invalid) > 0 {
+		return fmt.Errorf("invalid hex color(s) in %v", invalid)
+	}
+	return nil
 }
 
 // builtinSchemes are shipped with the binary and available without any config file.

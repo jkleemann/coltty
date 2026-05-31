@@ -17,6 +17,8 @@ func Resolve(startDir string, globalCfg *GlobalConfig) (*ResolvedScheme, error) 
 		return nil, fmt.Errorf("resolving absolute path: %w", err)
 	}
 
+	var scheme *ResolvedScheme
+
 	for {
 		configPath := filepath.Join(dir, dirConfigFile)
 		if _, err := os.Stat(configPath); err == nil {
@@ -24,9 +26,11 @@ func Resolve(startDir string, globalCfg *GlobalConfig) (*ResolvedScheme, error) 
 			if err != nil {
 				// Config parse error: warn and fall back to default
 				fmt.Fprintf(os.Stderr, "coltty: warning: failed to parse %s: %v\n", configPath, err)
-				return ResolveScheme(nil, globalCfg, ""), nil
+				scheme = ResolveScheme(nil, globalCfg, "")
+				break
 			}
-			return ResolveScheme(dirCfg, globalCfg, configPath), nil
+			scheme = ResolveScheme(dirCfg, globalCfg, configPath)
+			break
 		}
 
 		parent := filepath.Dir(dir)
@@ -36,6 +40,14 @@ func Resolve(startDir string, globalCfg *GlobalConfig) (*ResolvedScheme, error) 
 		dir = parent
 	}
 
-	// No .coltty.toml found anywhere; use default
-	return ResolveScheme(nil, globalCfg, ""), nil
+	if scheme == nil {
+		// No .coltty.toml found anywhere; use default
+		scheme = ResolveScheme(nil, globalCfg, "")
+	}
+
+	if err := scheme.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "coltty: warning: %v\n", err)
+	}
+
+	return scheme, nil
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -272,6 +273,69 @@ func TestBuiltinSchemeAsGlobalDefault(t *testing.T) {
 	}
 	if resolved.Background != "#1e1e2e" {
 		t.Errorf("expected catppuccin background '#1e1e2e', got %q", resolved.Background)
+	}
+}
+
+func TestResolvedSchemeValidate(t *testing.T) {
+	// Valid hex should pass
+	valid := &ResolvedScheme{
+		Foreground:          "#c0caf5",
+		Background:          "#1a1b26",
+		Cursor:              "#c0caf5",
+		Palette:             []string{"#15161e", "#f7768e"},
+		Bold:                "#ffffff",
+		SelectionForeground: "#000000",
+		SelectionBackground: "#111111",
+		Tab:                 "#222222",
+	}
+	if err := valid.Validate(); err != nil {
+		t.Errorf("expected valid scheme to pass, got error: %v", err)
+	}
+
+	// Empty palette should be OK
+	emptyPalette := &ResolvedScheme{
+		Foreground: "#c0caf5",
+		Background: "#1a1b26",
+		Cursor:     "#c0caf5",
+		Palette:    []string{},
+	}
+	if err := emptyPalette.Validate(); err != nil {
+		t.Errorf("expected empty palette to be OK, got error: %v", err)
+	}
+
+	// Invalid hex should fail with descriptive error
+	invalid := &ResolvedScheme{
+		Foreground:          "not-a-color",
+		Background:          "#1a1b26",
+		Cursor:              "#gggggg",
+		Palette:             []string{"#15161e", "bad"},
+		Bold:                "#fff",
+		SelectionForeground: "#0000000",
+		SelectionBackground: "",
+		Tab:                 "#22222G",
+	}
+	err := invalid.Validate()
+	if err == nil {
+		t.Fatal("expected invalid scheme to fail validation")
+	}
+	errStr := err.Error()
+	if !strings.Contains(errStr, "Foreground") {
+		t.Errorf("expected error to mention Foreground, got: %v", errStr)
+	}
+	if !strings.Contains(errStr, "Cursor") {
+		t.Errorf("expected error to mention Cursor, got: %v", errStr)
+	}
+	if !strings.Contains(errStr, "Palette[1]") {
+		t.Errorf("expected error to mention Palette[1], got: %v", errStr)
+	}
+	if !strings.Contains(errStr, "Bold") {
+		t.Errorf("expected error to mention Bold, got: %v", errStr)
+	}
+	if !strings.Contains(errStr, "SelectionForeground") {
+		t.Errorf("expected error to mention SelectionForeground, got: %v", errStr)
+	}
+	if !strings.Contains(errStr, "Tab") {
+		t.Errorf("expected error to mention Tab, got: %v", errStr)
 	}
 }
 

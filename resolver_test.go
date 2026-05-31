@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -95,5 +97,57 @@ background = "#222222"
 	}
 	if resolved.Foreground != "#c0caf5" {
 		t.Errorf("expected calm foreground '#c0caf5', got %q", resolved.Foreground)
+	}
+}
+
+func TestResolveWarnsOnInvalidHex(t *testing.T) {
+	dir := t.TempDir()
+
+	config := `
+scheme = "calm"
+
+[overrides]
+background = ";\\033]1337;..."
+`
+	os.WriteFile(filepath.Join(dir, ".coltty.toml"), []byte(config), 0644)
+
+	globalCfg := &GlobalConfig{
+		Schemes: map[string]Scheme{
+			"calm": {
+				Foreground: "#c0caf5",
+				Background: "#1a1b26",
+				Cursor:     "#c0caf5",
+			},
+		},
+	}
+
+	// Capture stderr
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	resolved, err := Resolve(dir, globalCfg)
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	stderrOutput := buf.String()
+
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if resolved == nil {
+		t.Fatal("expected scheme to be returned despite invalid hex")
+	}
+	if resolved.Background != ";\\033]1337;..." {
+		t.Errorf("expected invalid background to still be set, got %q", resolved.Background)
+	}
+	if stderrOutput == "" {
+		t.Error("expected warning on stderr for invalid hex, got nothing")
+	}
+	if !bytes.Contains([]byte(stderrOutput), []byte("warning")) {
+		t.Errorf("expected stderr to contain 'warning', got: %q", stderrOutput)
 	}
 }
