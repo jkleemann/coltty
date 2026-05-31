@@ -170,6 +170,9 @@ func globalConfigPath() string {
 	if globalConfigPathOverride != "" {
 		return globalConfigPathOverride
 	}
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "coltty", "config.toml")
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", "coltty", "config.toml")
 }

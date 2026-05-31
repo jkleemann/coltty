@@ -274,3 +274,37 @@ func TestBuiltinSchemeAsGlobalDefault(t *testing.T) {
 		t.Errorf("expected catppuccin background '#1e1e2e', got %q", resolved.Background)
 	}
 }
+
+func TestGlobalConfigPathRespectsXDG(t *testing.T) {
+	// Clear any override so we test the real path logic.
+	oldOverride := globalConfigPathOverride
+	globalConfigPathOverride = ""
+	defer func() { globalConfigPathOverride = oldOverride }()
+
+	// Case 1: XDG_CONFIG_HOME is set.
+	xdgDir := t.TempDir()
+	oldXDG := os.Getenv("XDG_CONFIG_HOME")
+	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+	defer func() {
+		if oldXDG == "" {
+			os.Unsetenv("XDG_CONFIG_HOME")
+		} else {
+			os.Setenv("XDG_CONFIG_HOME", oldXDG)
+		}
+	}()
+
+	path := globalConfigPath()
+	expected := filepath.Join(xdgDir, "coltty", "config.toml")
+	if path != expected {
+		t.Errorf("expected %q when XDG_CONFIG_HOME is set, got %q", expected, path)
+	}
+
+	// Case 2: XDG_CONFIG_HOME is unset — should fall back to ~/.config.
+	os.Unsetenv("XDG_CONFIG_HOME")
+	path = globalConfigPath()
+	home, _ := os.UserHomeDir()
+	expected = filepath.Join(home, ".config", "coltty", "config.toml")
+	if path != expected {
+		t.Errorf("expected %q when XDG_CONFIG_HOME is unset, got %q", expected, path)
+	}
+}
