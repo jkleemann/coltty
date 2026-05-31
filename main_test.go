@@ -349,3 +349,134 @@ func TestToAdapterSchemeNoExtras(t *testing.T) {
 		t.Errorf("expected nil extras when no extended colors set, got %v", adapterScheme.Extras)
 	}
 }
+
+func TestPrintSchemeWithPalette(t *testing.T) {
+	s := &ResolvedScheme{
+		Source:     "/test/path",
+		Foreground: "#c0caf5",
+		Background: "#1a1b26",
+		Cursor:     "#c0caf5",
+		Palette:    []string{"#111", "#222", "#333"},
+	}
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	printScheme(s)
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	out := buf.String()
+
+	expected := "Source:     /test/path\nForeground: #c0caf5\nBackground: #1a1b26\nCursor:     #c0caf5\nPalette:    #111, #222, #333\n"
+	if out != expected {
+		t.Errorf("unexpected output:\ngot:\n%q\nwant:\n%q", out, expected)
+	}
+}
+
+func TestPrintSchemeNoPalette(t *testing.T) {
+	s := &ResolvedScheme{
+		Source:     "(default)",
+		Foreground: "#ebdbb2",
+		Background: "#282828",
+		Cursor:     "#ebdbb2",
+	}
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	printScheme(s)
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	out := buf.String()
+
+	expected := "Source:     (default)\nForeground: #ebdbb2\nBackground: #282828\nCursor:     #ebdbb2\n"
+	if out != expected {
+		t.Errorf("unexpected output:\ngot:\n%q\nwant:\n%q", out, expected)
+	}
+}
+
+func TestToAdapterSchemePartialExtras(t *testing.T) {
+	resolved := &ResolvedScheme{
+		Foreground:         "#c0caf5",
+		Background:         "#1a1b26",
+		Cursor:             "#c0caf5",
+		SchemeName:         "partial",
+		Bold:               "#ffffff",
+		TerminalAppProfile: "Basic",
+	}
+	adapterScheme := toAdapterScheme(resolved)
+	if adapterScheme.Extras == nil {
+		t.Fatal("expected extras to be set")
+	}
+	if len(adapterScheme.Extras) != 2 {
+		t.Errorf("expected 2 extras, got %d", len(adapterScheme.Extras))
+	}
+	if adapterScheme.Extras["bold"] != "#ffffff" {
+		t.Errorf("expected bold extra, got %q", adapterScheme.Extras["bold"])
+	}
+	if adapterScheme.Extras["terminal_app_profile"] != "Basic" {
+		t.Errorf("expected terminal_app_profile extra, got %q", adapterScheme.Extras["terminal_app_profile"])
+	}
+	if _, ok := adapterScheme.Extras["selection_foreground"]; ok {
+		t.Error("expected selection_foreground to not be set")
+	}
+}
+
+func TestFormatInlineConfigWithPalette(t *testing.T) {
+	scheme := Scheme{
+		Foreground: "#c0caf5",
+		Background: "#1a1b26",
+		Cursor:     "#c0caf5",
+		Palette:    []string{"#111", "#222", "#333", "#444", "#555"},
+	}
+	result := formatInlineConfig("test", scheme)
+
+	expected := `# Generated from scheme "test"
+
+[overrides]
+foreground = "#c0caf5"
+background = "#1a1b26"
+cursor = "#c0caf5"
+palette = [
+    "#111", "#222", "#333", "#444",
+    "#555"
+]
+`
+	if result != expected {
+		t.Errorf("unexpected output:\ngot:\n%q\nwant:\n%q", result, expected)
+	}
+}
+
+func TestFormatInlineConfigWithPaletteExactMultiple(t *testing.T) {
+	scheme := Scheme{
+		Foreground: "#c0caf5",
+		Background: "#1a1b26",
+		Cursor:     "#c0caf5",
+		Palette:    []string{"#111", "#222", "#333", "#444"},
+	}
+	result := formatInlineConfig("test", scheme)
+
+	expected := `# Generated from scheme "test"
+
+[overrides]
+foreground = "#c0caf5"
+background = "#1a1b26"
+cursor = "#c0caf5"
+palette = [
+    "#111", "#222", "#333", "#444"
+]
+`
+	if result != expected {
+		t.Errorf("unexpected output:\ngot:\n%q\nwant:\n%q", result, expected)
+	}
+}
