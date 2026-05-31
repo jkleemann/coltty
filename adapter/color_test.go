@@ -17,6 +17,12 @@ func TestValidateHex(t *testing.T) {
 		{"invalid chars", "#gggggg", true},
 		{"empty", "", true},
 		{"just hash", "#", true},
+		{"invalid red component", "#gg0000", true},
+		{"invalid green component", "#00gg00", true},
+		{"invalid blue component", "#0000gg", true},
+		{"invalid red only", "#xx0000", true},
+		{"invalid green only", "#0xx000", true},
+		{"invalid blue only", "#0000xx", true},
 	}
 
 	for _, tt := range tests {

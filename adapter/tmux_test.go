@@ -85,6 +85,25 @@ func TestSplitOSCSequences(t *testing.T) {
 	}
 }
 
+func TestSplitOSCSequencesNoOSC(t *testing.T) {
+	input := "some random text without escape sequences"
+	seqs := splitOSCSequences(input)
+	if len(seqs) != 0 {
+		t.Errorf("expected 0 sequences, got %d: %v", len(seqs), seqs)
+	}
+}
+
+func TestSplitOSCSequencesUnterminated(t *testing.T) {
+	input := "\033]10;#c0caf5"
+	seqs := splitOSCSequences(input)
+	if len(seqs) != 1 {
+		t.Fatalf("expected 1 sequence, got %d: %v", len(seqs), seqs)
+	}
+	if seqs[0] != input {
+		t.Errorf("expected unterminated sequence to be returned as-is, got %q", seqs[0])
+	}
+}
+
 func TestOSCEmitterWithTmux(t *testing.T) {
 	t.Setenv("TMUX", "/tmp/tmux-1000/default,12345,0")
 

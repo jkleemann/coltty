@@ -89,6 +89,28 @@ func TestGhosttyApplyCreatesDir(t *testing.T) {
 	}
 }
 
+func TestGhosttyApplyWriteFragmentError(t *testing.T) {
+	// Use a read-only directory to force writeFragment to fail.
+	dir := t.TempDir()
+	readOnlyDir := filepath.Join(dir, "readonly")
+	if err := os.Mkdir(readOnlyDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(readOnlyDir, 0755) // cleanup for temp dir removal
+
+	fragmentPath := filepath.Join(readOnlyDir, "ghostty-colors")
+	g := NewGhosttyAdapter(fragmentPath)
+
+	scheme := &ResolvedScheme{
+		Foreground: "#ffffff",
+		Background: "#000000",
+	}
+
+	if err := g.Apply(scheme); err == nil {
+		t.Error("expected error when writeFragment fails")
+	}
+}
+
 func TestGhosttyName(t *testing.T) {
 	g := NewGhosttyAdapter("")
 	if g.Name() != "ghostty" {

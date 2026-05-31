@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -235,7 +237,6 @@ func TestImportCommandAutoDetect(t *testing.T) {
 		t.Errorf("expected empty for .txt, got %q", f)
 	}
 }
-
 func TestAppendToGlobalConfigAtomic(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.toml")
@@ -255,6 +256,7 @@ palette = [
     "#cccccc", "#dddddd", "#eeeeee", "#ffffff",
 ]
 `
+
 	if err := os.WriteFile(configPath, []byte(initial), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -306,5 +308,157 @@ palette = [
 	}
 	if _, ok := cfg.Schemes["seed"]; !ok {
 		t.Error("missing seed scheme in final config")
+	}
+}
+
+func TestAppendToGlobalConfigOverwriteWarning(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "config.toml")
+
+	globalConfigPathOverride = configPath
+	defer func() { globalConfigPathOverride = "" }()
+
+	// Seed a config with one scheme.
+	initial := `[schemes.dracula]
+foreground = "#111111"
+background = "#222222"
+cursor = "#333333"
+`
+	if err := os.WriteFile(configPath, []byte(initial), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Capture stderr.
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	scheme := Scheme{Foreground: "#ffffff", Background: "#000000", Cursor: "#ff0000"}
+	err := appendToGlobalConfig("dracula", scheme)
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	stderrOutput := buf.String()
+	if !strings.Contains(stderrOutput, "overwriting existing scheme") {
+		t.Errorf("expected overwrite warning, got: %q", stderrOutput)
+	}
+}
+
+func TestNormalizeHexEmpty(t *testing.T) {
+	if got := normalizeHex(""); got != "" {
+		t.Errorf("expected empty string, got %q", got)
+	}
+	if got := normalizeHex("   "); got != "" {
+		t.Errorf("expected empty string for whitespace, got %q", got)
+	}
+}
+
+func TestNormalizeHexWithHash(t *testing.T) {
+	if got := normalizeHex("#FF0000"); got != "#ff0000" {
+		t.Errorf("expected '#ff0000', got %q", got)
+	}
+}
+
+func TestNormalizeHexWithoutHash(t *testing.T) {
+	if got := normalizeHex("FF0000"); got != "#ff0000" {
+		t.Errorf("expected '#ff0000', got %q", got)
+	}
+}
+
+func TestImportGoghMissingFile(t *testing.T) {
+	_, _, err := importGogh("/nonexistent/path/theme.json")
+	if err == nil {
+		t.Error("expected error for missing file")
+	}
+}
+
+func TestImportGoghInvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.json")
+	os.WriteFile(path, []byte("not json"), 0644)
+	_, _, err := importGogh(path)
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestImportBase16MissingFile(t *testing.T) {
+	_, _, err := importBase16("/nonexistent/path/theme.yaml")
+	if err == nil {
+		t.Error("expected error for missing file")
+	}
+}
+
+func TestImportBase16InvalidYAML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.yaml")
+	os.WriteFile(path, []byte("not: yaml: ["), 0644)
+	_, _, err := importBase16(path)
+	if err == nil {
+		t.Error("expected error for invalid YAML")
+	}
+}
+
+func TestImportITerm2MissingFile(t *testing.T) {
+	_, _, err := importITerm2("/nonexistent/path/theme.itermcolors")
+	if err == nil {
+		t.Error("expected error for missing file")
+	}
+}
+
+func TestImportITerm2InvalidPlist(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.itermcolors")
+	os.WriteFile(path, []byte("not a plist"), 0644)
+	_, _, err := importITerm2(path)
+	if err == nil {
+		t.Error("expected error for invalid plist")
+	}
+}
+
+func TestFormatSchemeTomlEmptyPalette(t *testing.T) {
+	scheme := Scheme{
+		Foreground: "#c0caf5",
+		Background: "#1a1b26",
+		Cursor:     "#c0caf5",
+	}
+	result := formatSchemeToml("minimal", scheme)
+	if strings.Contains(result, "palette = [") {
+		t.Error("expected no palette section for empty palette")
+	}
+	if !strings.Contains(result, "[schemes.minimal]") {
+		t.Error("expected scheme header")
+	}
+}
+
+func TestFormatSchemeTomlExtendedColors(t *testing.T) {
+	scheme := Scheme{
+		Foreground:          "#c0caf5",
+		Background:          "#1a1b26",
+		Cursor:              "#c0caf5",
+		Bold:                "#ffffff",
+		SelectionForeground: "#000000",
+		SelectionBackground: "#111111",
+		Tab:                 "#222222",
+	}
+	result := formatSchemeToml("extended", scheme)
+	if !strings.Contains(result, `bold = "#ffffff"`) {
+		t.Error("expected bold color")
+	}
+	if !strings.Contains(result, `selection_foreground = "#000000"`) {
+		t.Error("expected selection_foreground color")
+	}
+	if !strings.Contains(result, `selection_background = "#111111"`) {
+		t.Error("expected selection_background color")
+	}
+	if !strings.Contains(result, `tab = "#222222"`) {
+		t.Error("expected tab color")
 	}
 }

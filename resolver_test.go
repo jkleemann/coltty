@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -146,5 +147,48 @@ background = ";\\033]1337;..."
 	}
 	if stderrOutput != "" {
 		t.Errorf("expected no warning from Resolve(), got: %q", stderrOutput)
+	}
+}
+
+func TestResolveWarnsOnInvalidToml(t *testing.T) {
+	dir := t.TempDir()
+	// Write invalid TOML to .coltty.toml
+	os.WriteFile(filepath.Join(dir, ".coltty.toml"), []byte("not valid toml [[["), 0644)
+
+	globalCfg := &GlobalConfig{
+		Schemes: map[string]Scheme{
+			"calm": {
+				Foreground: "#c0caf5",
+				Background: "#1a1b26",
+				Cursor:     "#c0caf5",
+			},
+		},
+	}
+
+	// Capture stderr
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	resolved, err := Resolve(dir, globalCfg)
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	stderrOutput := buf.String()
+
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if resolved == nil {
+		t.Fatal("expected scheme to be returned")
+	}
+	if resolved.Foreground != hardcodedDefault.Foreground {
+		t.Errorf("expected hardcoded default after parse failure, got %q", resolved.Foreground)
+	}
+	if !strings.Contains(stderrOutput, "failed to parse") {
+		t.Errorf("expected parse warning on stderr, got: %q", stderrOutput)
 	}
 }

@@ -405,3 +405,144 @@ func TestGlobalConfigPathRespectsXDG(t *testing.T) {
 		t.Errorf("expected %q when XDG_CONFIG_HOME is unset, got %q", expected, path)
 	}
 }
+
+func TestLoadGlobalConfigFromReadError(t *testing.T) {
+	// Use a directory path as the config path to trigger a read error.
+	dir := t.TempDir()
+	_, err := LoadGlobalConfigFrom(dir)
+	if err == nil {
+		t.Error("expected error when path is a directory")
+	}
+}
+
+func TestLoadGlobalConfigFromUnmarshalError(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.toml")
+	// Write invalid TOML.
+	if err := os.WriteFile(configPath, []byte("not valid toml [[["), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadGlobalConfigFrom(configPath)
+	if err == nil {
+		t.Error("expected error for invalid TOML")
+	}
+}
+
+func TestLoadDirConfigReadError(t *testing.T) {
+	// Use a directory path to trigger a read error.
+	dir := t.TempDir()
+	_, err := LoadDirConfig(dir)
+	if err == nil {
+		t.Error("expected error when path is a directory")
+	}
+}
+
+func TestLoadDirConfigUnmarshalError(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, ".coltty.toml")
+	// Write invalid TOML.
+	if err := os.WriteFile(configPath, []byte("not valid toml [[["), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadDirConfig(configPath)
+	if err == nil {
+		t.Error("expected error for invalid TOML")
+	}
+}
+
+func TestGetDefaultSchemeEmptyDefault(t *testing.T) {
+	globalCfg := &GlobalConfig{
+		Schemes: map[string]Scheme{
+			"custom": {Foreground: "#111", Background: "#222", Cursor: "#333"},
+		},
+	}
+	// Default.Scheme is empty
+	scheme, isBuiltin := getDefaultScheme(globalCfg)
+	if scheme.Foreground != hardcodedDefault.Foreground {
+		t.Errorf("expected hardcoded default, got %q", scheme.Foreground)
+	}
+	if !isBuiltin {
+		t.Error("expected isBuiltin to be true when default is empty")
+	}
+}
+
+func TestApplyOverridesAllFields(t *testing.T) {
+	base := Scheme{
+		Foreground:          "#111",
+		Background:          "#222",
+		Cursor:              "#333",
+		Palette:             []string{"#000"},
+		Bold:                "#444",
+		SelectionForeground: "#555",
+		SelectionBackground: "#666",
+		Tab:                 "#777",
+		ItermPreset:         "old",
+		TerminalAppProfile:  "old-profile",
+	}
+	overrides := Scheme{
+		Foreground:          "#aaa",
+		Background:          "#bbb",
+		Cursor:              "#ccc",
+		Palette:             []string{"#fff"},
+		Bold:                "#ddd",
+		SelectionForeground: "#eee",
+		SelectionBackground: "#f0f",
+		Tab:                 "#0f0",
+		ItermPreset:         "new",
+		TerminalAppProfile:  "new-profile",
+	}
+	result := applyOverrides(base, overrides)
+	if result.Foreground != "#aaa" {
+		t.Errorf("expected foreground '#aaa', got %q", result.Foreground)
+	}
+	if result.Background != "#bbb" {
+		t.Errorf("expected background '#bbb', got %q", result.Background)
+	}
+	if result.Cursor != "#ccc" {
+		t.Errorf("expected cursor '#ccc', got %q", result.Cursor)
+	}
+	if len(result.Palette) != 1 || result.Palette[0] != "#fff" {
+		t.Errorf("expected palette ['#fff'], got %v", result.Palette)
+	}
+	if result.Bold != "#ddd" {
+		t.Errorf("expected bold '#ddd', got %q", result.Bold)
+	}
+	if result.SelectionForeground != "#eee" {
+		t.Errorf("expected selection_foreground '#eee', got %q", result.SelectionForeground)
+	}
+	if result.SelectionBackground != "#f0f" {
+		t.Errorf("expected selection_background '#f0f', got %q", result.SelectionBackground)
+	}
+	if result.Tab != "#0f0" {
+		t.Errorf("expected tab '#0f0', got %q", result.Tab)
+	}
+	if result.ItermPreset != "new" {
+		t.Errorf("expected iterm_preset 'new', got %q", result.ItermPreset)
+	}
+	if result.TerminalAppProfile != "new-profile" {
+		t.Errorf("expected terminal_app_profile 'new-profile', got %q", result.TerminalAppProfile)
+	}
+}
+
+func TestApplyOverridesNoOverrides(t *testing.T) {
+	base := Scheme{
+		Foreground: "#111",
+		Background: "#222",
+		Cursor:     "#333",
+		Palette:    []string{"#000"},
+	}
+	overrides := Scheme{}
+	result := applyOverrides(base, overrides)
+	if result.Foreground != "#111" {
+		t.Errorf("expected foreground unchanged, got %q", result.Foreground)
+	}
+	if result.Background != "#222" {
+		t.Errorf("expected background unchanged, got %q", result.Background)
+	}
+	if result.Cursor != "#333" {
+		t.Errorf("expected cursor unchanged, got %q", result.Cursor)
+	}
+	if len(result.Palette) != 1 || result.Palette[0] != "#000" {
+		t.Errorf("expected palette unchanged, got %v", result.Palette)
+	}
+}

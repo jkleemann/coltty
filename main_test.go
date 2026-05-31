@@ -216,7 +216,6 @@ func TestSetCommandOverwritesExisting(t *testing.T) {
 		t.Error("expected file to be overwritten with new scheme")
 	}
 }
-
 func TestSchemesCommandWithConfig(t *testing.T) {
 	configDir := t.TempDir()
 
@@ -234,6 +233,7 @@ foreground = "#custom"
 background = "#override"
 cursor = "#user"
 `
+
 	configPath := filepath.Join(configDir, "config.toml")
 	os.WriteFile(configPath, []byte(config), 0644)
 
@@ -256,5 +256,96 @@ cursor = "#user"
 	// dracula is both built-in and user-defined, so it should show (override)
 	if !strings.Contains(stdout, "(override)") {
 		t.Error("expected '(override)' marker for user-overridden built-in scheme")
+	}
+}
+
+func TestLookupSchemeNotFound(t *testing.T) {
+	_, ok := lookupScheme("nonexistent", nil)
+	if ok {
+		t.Error("expected lookupScheme to return false for unknown scheme")
+	}
+
+	globalCfg := &GlobalConfig{
+		Schemes: map[string]Scheme{
+			"custom": {Foreground: "#111", Background: "#222", Cursor: "#333"},
+		},
+	}
+	_, ok = lookupScheme("also-nonexistent", globalCfg)
+	if ok {
+		t.Error("expected lookupScheme to return false for unknown scheme even with global config")
+	}
+}
+
+func TestFormatInlineConfigEmptyPalette(t *testing.T) {
+	scheme := Scheme{
+		Foreground: "#c0caf5",
+		Background: "#1a1b26",
+		Cursor:     "#c0caf5",
+		Palette:    []string{},
+	}
+	result := formatInlineConfig("test", scheme)
+	if strings.Contains(result, "palette = [") {
+		t.Error("expected no palette section for empty palette")
+	}
+	if !strings.Contains(result, `foreground = "#c0caf5"`) {
+		t.Error("expected foreground in output")
+	}
+}
+
+func TestToAdapterSchemeAllExtras(t *testing.T) {
+	resolved := &ResolvedScheme{
+		Foreground:          "#c0caf5",
+		Background:          "#1a1b26",
+		Cursor:              "#c0caf5",
+		Palette:             []string{"#111"},
+		SchemeName:          "test",
+		Bold:                "#ffffff",
+		SelectionForeground: "#000000",
+		SelectionBackground: "#111111",
+		Tab:                 "#222222",
+		ItermPreset:         "Preset Name",
+		TerminalAppProfile:  "Profile Name",
+	}
+	adapterScheme := toAdapterScheme(resolved)
+	if adapterScheme.Foreground != "#c0caf5" {
+		t.Errorf("expected foreground '#c0caf5', got %q", adapterScheme.Foreground)
+	}
+	if adapterScheme.Name != "test" {
+		t.Errorf("expected name 'test', got %q", adapterScheme.Name)
+	}
+	if adapterScheme.Extras == nil {
+		t.Fatal("expected extras to be set")
+	}
+	if adapterScheme.Extras["bold"] != "#ffffff" {
+		t.Errorf("expected bold extra, got %q", adapterScheme.Extras["bold"])
+	}
+	if adapterScheme.Extras["selection_foreground"] != "#000000" {
+		t.Errorf("expected selection_foreground extra, got %q", adapterScheme.Extras["selection_foreground"])
+	}
+	if adapterScheme.Extras["selection_background"] != "#111111" {
+		t.Errorf("expected selection_background extra, got %q", adapterScheme.Extras["selection_background"])
+	}
+	if adapterScheme.Extras["tab"] != "#222222" {
+		t.Errorf("expected tab extra, got %q", adapterScheme.Extras["tab"])
+	}
+	if adapterScheme.Extras["iterm_preset"] != "Preset Name" {
+		t.Errorf("expected iterm_preset extra, got %q", adapterScheme.Extras["iterm_preset"])
+	}
+	if adapterScheme.Extras["terminal_app_profile"] != "Profile Name" {
+		t.Errorf("expected terminal_app_profile extra, got %q", adapterScheme.Extras["terminal_app_profile"])
+	}
+}
+
+func TestToAdapterSchemeNoExtras(t *testing.T) {
+	resolved := &ResolvedScheme{
+		Foreground: "#c0caf5",
+		Background: "#1a1b26",
+		Cursor:     "#c0caf5",
+		Palette:    []string{"#111"},
+		SchemeName: "minimal",
+	}
+	adapterScheme := toAdapterScheme(resolved)
+	if adapterScheme.Extras != nil {
+		t.Errorf("expected nil extras when no extended colors set, got %v", adapterScheme.Extras)
 	}
 }
